@@ -5,6 +5,18 @@ echo "========================================="
 echo "🔧 Anvil with JSONBin.io Persistence"
 echo "========================================="
 
+# Hardcoded JSONBin.io credentials
+JSONBIN_BIN_ID="6994c9b743b1c97be986b84b"
+JSONBIN_API_KEY="$2a$10$UFKAyDvpR8RhJ8QzH2Q3zuDyayu0LAVb9OVIhHZyhmxTaZInpfrTu"
+
+STATE_FILE=${STATE_FILE:-/tmp/state.json}
+PORT=${PORT:-8545}
+CHAIN_ID=${CHAIN_ID:-1}
+FORK_URL=${FORK_URL:-https://eth-mainnet.g.alchemy.com/v2/QFjExKnnaI2I4qTV7EFM7WwB0gl08X0n}
+
+# Your Render URL (displayed in logs)
+RENDER_URL="https://anvil-render.onrender.com"
+
 # Function to validate that a file is a proper Anvil state JSON
 validate_state() {
   local file=$1
@@ -67,16 +79,7 @@ upload_state() {
   fi
 }
 
-# Function for periodic upload (runs in background)
-periodic_upload() {
-  while true; do
-    sleep 40
-    echo "⏰ Periodic upload triggered..."
-    upload_state
-  done
-}
-
-# Trap signals to upload state on exit (final upload)
+# Trap signals to upload state on exit
 trap 'upload_state; exit 0' SIGTERM SIGINT
 
 # Download previous state (if any)
@@ -98,13 +101,10 @@ echo "🚀 Starting Anvil with command:"
 echo "   $CMD"
 echo ""
 echo "📡 RPC endpoint: http://localhost:${PORT}"
-echo "   (via Render URL: https://your-app.onrender.com)"
+echo "   Public URL: ${RENDER_URL}"
 echo ""
 echo "⏳ Waiting for connections... (Press Ctrl+C to stop and save state)"
 echo "========================================="
-
-# Start the periodic upload in background
-periodic_upload &
 
 # Start Anvil
 $CMD &
