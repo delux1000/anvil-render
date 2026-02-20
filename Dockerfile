@@ -27,7 +27,7 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Set default environment variables (can be overridden)
-ENV PORT=8545
+ENV PORT=1000
 ENV STATE_FILE=/tmp/state.json
 
 ENTRYPOINT ["/entrypoint.sh"]
