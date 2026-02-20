@@ -67,7 +67,16 @@ upload_state() {
   fi
 }
 
-# Trap signals to upload state on exit
+# Function for periodic upload (runs in background)
+periodic_upload() {
+  while true; do
+    sleep 40
+    echo "⏰ Periodic upload triggered..."
+    upload_state
+  done
+}
+
+# Trap signals to upload state on exit (final upload)
 trap 'upload_state; exit 0' SIGTERM SIGINT
 
 # Download previous state (if any)
@@ -93,6 +102,9 @@ echo "   (via Render URL: https://your-app.onrender.com)"
 echo ""
 echo "⏳ Waiting for connections... (Press Ctrl+C to stop and save state)"
 echo "========================================="
+
+# Start the periodic upload in background
+periodic_upload &
 
 # Start Anvil
 $CMD &
