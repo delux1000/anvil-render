@@ -27,6 +27,15 @@ log() {
 }
 
 # -------------------------------------------------------------------
+# Check that required commands exist
+for cmd in curl jq; do
+    if ! command -v $cmd >/dev/null 2>&1; then
+        log "❌ Required command '$cmd' not found. Aborting."
+        exit 1
+    fi
+done
+
+# -------------------------------------------------------------------
 # Validate that a file is a proper Anvil state (has a "block" field)
 validate_state() {
     local file=$1
@@ -43,13 +52,23 @@ validate_state() {
 # Download state from JSONBin.io
 download_state() {
     log "📥 Downloading previous state from JSONBin.io..."
+    if [ -z "${JSONBIN_BIN_ID}" ] || [ -z "${JSONBIN_API_KEY}" ]; then
+        log "⚠️ JSONBIN_BIN_ID or JSONBIN_API_KEY not set. Starting fresh."
+        rm -f "${STATE_FILE}"
+        return 0
+    fi
+
     RESPONSE=$(curl -s -X GET "https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest" \
-        -H "X-Master-Key: ${JSONBIN_API_KEY}")
-    
+        -H "X-Master-Key: ${JSONBIN_API_KEY}") || {
+        log "⚠️ curl failed. Starting fresh."
+        rm -f "${STATE_FILE}"
+        return 0
+    }
+
     if echo "$RESPONSE" | jq -e '.record' > /dev/null 2>&1; then
         echo "$RESPONSE" | jq -r '.record' > "${STATE_FILE}"
         if validate_state "${STATE_FILE}"; then
-            log "✅ Valid state downloaded (size: $(wc -c < "${STATE_FILE") bytes)"
+            log "✅ Valid state downloaded (size: $(wc -c < "${STATE_FILE}") bytes)"
         else
             log "⚠️ Downloaded state is invalid (missing required fields). Starting fresh."
             rm -f "${STATE_FILE}"
@@ -64,13 +83,21 @@ download_state() {
 # Upload local state to JSONBin.io
 upload_state() {
     log "📤 Uploading state to JSONBin.io..."
+    if [ -z "${JSONBIN_BIN_ID}" ] || [ -z "${JSONBIN_API_KEY}" ]; then
+        log "⚠️ JSONBIN_BIN_ID or JSONBIN_API_KEY not set. Skipping upload."
+        return 0
+    fi
+
     if [ -f "${STATE_FILE}" ] && validate_state "${STATE_FILE}"; then
         STATE_CONTENT=$(cat "${STATE_FILE}")
         RESPONSE=$(curl -s -X PUT "https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}" \
             -H "Content-Type: application/json" \
             -H "X-Master-Key: ${JSONBIN_API_KEY}" \
-            -d "{\"record\": ${STATE_CONTENT}}")
-        
+            -d "{\"record\": ${STATE_CONTENT}}") || {
+            log "⚠️ curl upload failed."
+            return 0
+        }
+
         if echo "$RESPONSE" | jq -e '.record' > /dev/null 2>&1; then
             log "✅ State uploaded successfully!"
         else
