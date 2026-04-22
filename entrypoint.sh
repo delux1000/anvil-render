@@ -4,20 +4,16 @@ set -e
 # -------------------------------------------------------------------
 # Anvil + JSONBin.io Persistence Entrypoint
 # -------------------------------------------------------------------
-# Environment variables (set these in Render or your shell):
-#   JSONBIN_BIN_ID    - your JSONBin.io bin ID (required)
-#   JSONBIN_API_KEY   - your JSONBin.io master key (required)
-#   FORK_URL          - Ethereum RPC to fork from (e.g., Alchemy)
-#   CHAIN_ID          - chain ID (default: 1)
-#   PORT              - RPC port (default: 8545)
-#   STATE_FILE        - local state file path (default: /tmp/state.json)
+# Environment variables are hardcoded below - modify as needed
 # -------------------------------------------------------------------
 
-# Default values
-PORT=${PORT:-8545}
-CHAIN_ID=${CHAIN_ID:-1}
-STATE_FILE=${STATE_FILE:-/tmp/state.json}
-FORK_URL=${FORK_URL:-https://eth-mainnet.g.alchemy.com/v2/QFjExKnnaI2I4qTV7EFM7WwB0gl08X0n}
+# Hardcoded configuration - EDIT THESE VALUES
+JSONBIN_BIN_ID="6936f28bae596e708f8bafc0"
+JSONBIN_API_KEY='$2a$10$aAW84k1Q4lfQR8ELHBneT.01Go2JevCCoay/TR4AATTeNpTd7ou9K'
+FORK_URL="https://eth-mainnet.g.alchemy.com/v2/QFjExKnnaI2I4qTV7EFM7WwB0gl08X0n"
+CHAIN_ID="1"
+PORT="8545"
+STATE_FILE="/tmp/state.json"
 
 # -------------------------------------------------------------------
 # Logging helper (writes to stdout and a log file)
@@ -144,4 +140,4 @@ log "========================================="
 # Start Anvil and wait for it to finish
 $CMD &
 ANVIL_PID=$!
-wait $ANVIL_PID 
+wait $ANVIL_PID
