@@ -1,9 +1,7 @@
 #!/bin/bash
 
 # -------------------------------------------------------------------
-# Anvil STANDALONE Chain + JSONBin Persistence
-# NO FORK - Pure standalone chain
-# ALL balances are native and WILL survive restarts
+# SIMPLE STANDALONE ANVIL - NO FORK - WILL WORK
 # -------------------------------------------------------------------
 
 JSONBIN_BIN_ID="6936f28bae596e708f8bafc0"
@@ -16,113 +14,78 @@ LOG_FILE="/tmp/anvil-jsonbin.log"
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"; }
 
 log "========================================="
-log "🔷 STANDALONE CHAIN (NO FORK)"
+log "🔷 SIMPLE STANDALONE CHAIN"
 log "========================================="
 
-for cmd in curl jq anvil; do
-    command -v $cmd >/dev/null 2>&1 || { log "❌ Missing: $cmd"; exit 1; }
-done
+# Check deps
+command -v anvil >/dev/null 2>&1 || { log "❌ Missing anvil"; exit 1; }
+command -v curl >/dev/null 2>&1 || { log "❌ Missing curl"; exit 1; }
+command -v jq >/dev/null 2>&1 || { log "❌ Missing jq"; exit 1; }
 
 # -------------------------------------------------------------------
-# DOWNLOAD STATE
+# Download state
 # -------------------------------------------------------------------
-log "📥 Downloading state..."
+log "📥 Checking for saved state..."
 
 RESPONSE=$(curl -s --max-time 30 \
     "https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest" \
     -H "X-Master-Key: ${JSONBIN_API_KEY}")
 
-if echo "$RESPONSE" | jq -e '.record' > /dev/null 2>&1; then
-    RECORD=$(echo "$RESPONSE" | jq -r '.record')
-    
-    # Handle nested record
-    if echo "$RECORD" | jq -e '.block' > /dev/null 2>&1; then
-        echo "$RECORD" > "${STATE_FILE}"
-    elif echo "$RECORD" | jq -e '.record.block' > /dev/null 2>&1; then
-        echo "$RECORD" | jq -r '.record' > "${STATE_FILE}"
-    fi
-    
-    if [ -f "${STATE_FILE}" ] && jq -e '.block' "${STATE_FILE}" > /dev/null 2>&1; then
+STATE_LOADED="no"
+
+if echo "$RESPONSE" | jq -e '.record.record.block' > /dev/null 2>&1; then
+    echo "$RESPONSE" | jq -r '.record.record' > "${STATE_FILE}"
+    if jq -e '.block' "${STATE_FILE}" > /dev/null 2>&1; then
         STATE_LOADED="yes"
-        BLOCK=$(jq -r '.block.number // .block' "${STATE_FILE}")
-        ACCOUNTS=$(jq '.accounts | keys | length' "${STATE_FILE}")
-        log "✅ State loaded - Block: ${BLOCK}, Accounts: ${ACCOUNTS}"
-    else
-        rm -f "${STATE_FILE}"
-        STATE_LOADED="no"
+        log "✅ State found"
     fi
-else
-    STATE_LOADED="no"
+elif echo "$RESPONSE" | jq -e '.record.block' > /dev/null 2>&1; then
+    echo "$RESPONSE" | jq -r '.record' > "${STATE_FILE}"
+    if jq -e '.block' "${STATE_FILE}" > /dev/null 2>&1; then
+        STATE_LOADED="yes"
+        log "✅ State found"
+    fi
+fi
+
+if [ "$STATE_LOADED" = "no" ]; then
+    rm -f "${STATE_FILE}"
+    log "🆕 Fresh chain"
 fi
 
 # -------------------------------------------------------------------
-# UPLOAD STATE
+# Upload state
 # -------------------------------------------------------------------
 upload_state() {
-    if [ ! -f "${STATE_FILE}" ]; then
-        log "⚠️ No state file"
-        return 1
+    if [ -f "${STATE_FILE}" ] && jq -e '.block' "${STATE_FILE}" > /dev/null 2>&1; then
+        STATE_CONTENT=$(cat "${STATE_FILE}")
+        curl -s --max-time 30 -X PUT \
+            "https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}" \
+            -H "Content-Type: application/json" \
+            -H "X-Master-Key: ${JSONBIN_API_KEY}" \
+            -d "{\"record\": ${STATE_CONTENT}}" > /dev/null
+        log "✅ State saved"
     fi
-    
-    STATE_CONTENT=$(cat "${STATE_FILE}")
-    
-    curl -s --max-time 30 -X PUT \
-        "https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}" \
-        -H "Content-Type: application/json" \
-        -H "X-Master-Key: ${JSONBIN_API_KEY}" \
-        -d "{\"record\": ${STATE_CONTENT}}" > /dev/null
-    
-    BLOCK=$(jq -r '.block.number // .block' "${STATE_FILE}" 2>/dev/null || echo "?")
-    ACCOUNTS=$(jq '.accounts | keys | length' "${STATE_FILE}" 2>/dev/null || echo "0")
-    log "✅ Uploaded - Block: ${BLOCK}, Accounts: ${ACCOUNTS}"
 }
 
 # -------------------------------------------------------------------
-# MONITOR & AUTO-SAVE
+# Launch Anvil
 # -------------------------------------------------------------------
-LAST_BLOCK="0x0"
-monitor() {
-    while true; do
-        CURRENT=$(curl -s -X POST "http://localhost:${PORT}" \
-            -H 'Content-Type: application/json' \
-            --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
-            | jq -r '.result // "0x0"')
-        
-        if [ "$CURRENT" != "$LAST_BLOCK" ] && [ "$CURRENT" != "0x0" ]; then
-            log "🔔 Block: ${LAST_BLOCK} → ${CURRENT}"
-            upload_state
-            LAST_BLOCK="$CURRENT"
-        fi
-        sleep 2
-    done
-}
+log "🚀 Starting Anvil..."
 
-shutdown() {
-    log "💾 Final save..."
-    upload_state
-    log "👋 Done"
-    exit 0
-}
+CMD="anvil --chain-id ${CHAIN_ID} --host 0.0.0.0 --port ${PORT}"
 
-# -------------------------------------------------------------------
-# LAUNCH ANVIL - NO FORK!
-# -------------------------------------------------------------------
-log "🚀 Launching standalone chain..."
-
-CMD="anvil --chain-id ${CHAIN_ID} --host 0.0.0.0 --port ${PORT} --state ${STATE_FILE}"
-
-if [ "${STATE_LOADED}" = "yes" ] && [ -f "${STATE_FILE}" ]; then
-    log "📂 Resuming from saved state"
+if [ "$STATE_LOADED" = "yes" ] && [ -f "${STATE_FILE}" ]; then
+    CMD="${CMD} --state ${STATE_FILE}"
+    log "📂 With saved state"
 else
-    log "🆕 Fresh chain"
+    log "🆕 New chain"
 fi
 
 $CMD &
 ANVIL_PID=$!
-log "✅ PID: ${ANVIL_PID}"
 
-# Wait for ready
-sleep 3
+# Wait
+sleep 5
 for i in $(seq 1 15); do
     curl -s -X POST "http://localhost:${PORT}" \
         -H 'Content-Type: application/json' \
@@ -132,38 +95,60 @@ for i in $(seq 1 15); do
 done
 
 # -------------------------------------------------------------------
-# SHOW ACCOUNTS
+# Show accounts
 # -------------------------------------------------------------------
 log "========================================="
-log "🎁 DEFAULT ACCOUNTS (10,000 ETH each):"
+log "📋 AVAILABLE ACCOUNTS:"
 log ""
 
-ACCOUNTS=$(curl -s -X POST "http://localhost:${PORT}" \
+ACCOUNTS_JSON=$(curl -s -X POST "http://localhost:${PORT}" \
     -H 'Content-Type: application/json' \
-    --data '{"jsonrpc":"2.0","method":"eth_accounts","params":[],"id":1}' | jq -r '.result[]')
+    --data '{"jsonrpc":"2.0","method":"eth_accounts","params":[],"id":1}')
 
-for ADDR in $ACCOUNTS; do
+echo "$ACCOUNTS_JSON" | jq -r '.result[]' | while read ADDR; do
     BAL=$(curl -s -X POST "http://localhost:${PORT}" \
         -H 'Content-Type: application/json' \
-        --data "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getBalance\",\"params\":[\"${ADDR}\",\"latest\"],\"id\":1}" | jq -r '.result')
-    log "   ${ADDR}: ${BAL}"
+        --data "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getBalance\",\"params\":[\"${ADDR}\",\"latest\"],\"id\":1}" \
+        | jq -r '.result')
+    log "   ${ADDR}"
+    log "   Balance: ${BAL}"
+    log ""
 done
 
+log "🔑 Private Key for Account #0:"
+log "   0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+log ""
+
 # -------------------------------------------------------------------
-# START SYNC
+# Auto-save loop
 # -------------------------------------------------------------------
-trap shutdown SIGTERM SIGINT
-sleep 2
+LAST_BLOCK="0x0"
+
+trap 'log "💾 Saving..."; upload_state; log "👋 Done"; exit 0' SIGTERM SIGINT
+
+# Initial save
+sleep 3
 upload_state
-monitor &
 
 log "========================================="
-log "🎯 READY"
+log "🎯 CHAIN IS LIVE"
 log "========================================="
 log "📡 RPC: https://anvil-render-q5wl.onrender.com"
 log "⛓️  Chain ID: ${CHAIN_ID}"
-log "🆓 No fork - pure standalone"
-log "🔒 ALL balances SURVIVE restarts"
 log "========================================="
+
+while true; do
+    CURRENT=$(curl -s -X POST "http://localhost:${PORT}" \
+        -H 'Content-Type: application/json' \
+        --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
+        | jq -r '.result // "0x0"')
+    
+    if [ "$CURRENT" != "$LAST_BLOCK" ] && [ "$CURRENT" != "0x0" ]; then
+        log "🔔 Block: ${LAST_BLOCK} → ${CURRENT}"
+        upload_state
+        LAST_BLOCK="$CURRENT"
+    fi
+    sleep 2
+done &
 
 wait $ANVIL_PID
