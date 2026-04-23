@@ -2,7 +2,7 @@
 
 # -------------------------------------------------------------------
 # Anvil + JSONBin.io Persistence Entrypoint (ALL WALLETS VERSION)
-# Preserves balances for EVERY address
+# Preserves balances for EVERY address after restart
 # -------------------------------------------------------------------
 
 # Hardcoded configuration
@@ -24,14 +24,14 @@ log "========================================="
 log "🔷 ANVIL PERSISTENCE (ALL WALLETS)"
 log "========================================="
 
-# Check dependencies
-for cmd in curl jq bc; do
+# Check dependencies (no bc needed!)
+for cmd in curl jq anvil; do
     if ! command -v $cmd >/dev/null 2>&1; then
         log "❌ Missing: $cmd"
         exit 1
     fi
 done
-log "✅ Dependencies OK"
+log "✅ Dependencies OK (curl, jq, anvil)"
 
 # -------------------------------------------------------------------
 # Validate state file
@@ -55,7 +55,6 @@ if echo "$RESPONSE" | jq -e '.record' > /dev/null 2>&1; then
         BLOCK=$(jq -r '.block.number // .block' "${STATE_FILE}" 2>/dev/null || echo "?")
         log "✅ State loaded (Block: ${BLOCK}, Size: ${SIZE} bytes)"
         
-        # Show saved wallets
         WALLET_COUNT=$(jq '.accounts | keys | length' "${STATE_FILE}" 2>/dev/null || echo "0")
         log "👛 Wallets in state: ${WALLET_COUNT}"
     else
@@ -94,7 +93,7 @@ upload_state() {
 }
 
 # -------------------------------------------------------------------
-# 🔥 KEY FUNCTION: Touch all modified wallets to force into state
+# Touch all wallets to force into state
 # -------------------------------------------------------------------
 touch_all_wallets() {
     log "========================================="
@@ -117,11 +116,9 @@ touch_all_wallets() {
             --data "{\"jsonrpc\":\"2.0\",\"method\":\"$1\",\"params\":$2,\"id\":1}"
     }
     
-    # Get all accounts from the state file
     if [ -f "${STATE_FILE}" ] && [ "${STATE_LOADED}" = "yes" ]; then
         log "📋 Reading wallets from state file..."
         
-        # Extract all addresses from state
         ADDRESSES=$(jq -r '.accounts | keys[]' "${STATE_FILE}" 2>/dev/null)
         
         if [ -z "$ADDRESSES" ]; then
@@ -141,25 +138,24 @@ touch_all_wallets() {
                 TOUCHED=$((TOUCHED + 1))
                 log "   ✅ Touched: ${ADDR:0:10}...${ADDR: -6}"
             else
-                log "   ⚠️ Failed: ${ADDR:0:10}...${ADDR: -6} (no funds for gas)"
+                log "   ⚠️ Failed: ${ADDR:0:10}...${ADDR: -6}"
             fi
         done
         
-        log "🎯 Touched ${TOUCHED} wallets - they will persist after restart"
+        log "🎯 Touched ${TOUCHED} wallets - will persist after restart"
     else
-        log "🆕 No previous wallets to restore"
+        log "🆕 No previous wallets"
     fi
 }
 
 # -------------------------------------------------------------------
-# Periodic sync with wallet touch
+# Periodic sync
 # -------------------------------------------------------------------
 SYNC_COUNT=0
 touch_before_sync() {
     SYNC_COUNT=$((SYNC_COUNT + 1))
-    log "⏰ Sync #${SYNC_COUNT}: Ensuring all wallets are in state..."
+    log "⏰ Sync #${SYNC_COUNT}..."
     
-    # Quick re-touch of known wallets
     if [ -f "${STATE_FILE}" ]; then
         ADDRESSES=$(jq -r '.accounts | keys[]' "${STATE_FILE}" 2>/dev/null)
         for ADDR in $ADDRESSES; do
@@ -219,7 +215,7 @@ log "========================================="
 log "🎯 ALL WALLETS PROTECTED"
 log "========================================="
 log "📡 RPC: https://anvil-render-q5wl.onrender.com"
-log "🔒 Every wallet balance will survive restarts"
+log "🔒 All wallet balances survive restarts"
 log "========================================="
 
 wait $ANVIL_PID
