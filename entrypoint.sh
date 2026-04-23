@@ -1,52 +1,41 @@
 #!/bin/bash
 
 # -------------------------------------------------------------------
-# Anvil Standalone Chain + JSONBin Persistence + Explorer
-# - Full chain features: transfers, swaps, contracts
-# - Explorer UI like Etherscan
-# - All balances survive restarts
+# Anvil Mainnet Fork + Balance Persistence
+# USDT at 0xdAC17F958D2ee523a2206206994597C13D831ec7
+# All balances survive restarts
 # -------------------------------------------------------------------
 
-# Hardcoded configuration
 JSONBIN_BIN_ID="6936f28bae596e708f8bafc0"
 JSONBIN_API_KEY='$2a$10$aAW84k1Q4lfQR8ELHBneT.01Go2JevCCoay/TR4AATTeNpTd7ou9K'
+FORK_URL="https://eth-mainnet.g.alchemy.com/v2/QFjExKnnaI2I4qTV7EFM7WwB0gl08X0n"
 CHAIN_ID="1"
 PORT="8545"
 STATE_FILE="/tmp/state.json"
+BALANCES_FILE="/tmp/balances.json"
+USDT="0xdAC17F958D2ee523a2206206994597C13D831ec7"
 
-# -------------------------------------------------------------------
-# Logging
 LOG_FILE="/tmp/anvil-jsonbin.log"
-log() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
+log() { echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"; }
+
+rpc() {
+    curl -s -X POST "http://localhost:${PORT}" \
+        -H "Content-Type: application/json" \
+        --data "{\"jsonrpc\":\"2.0\",\"method\":\"$1\",\"params\":$2,\"id\":1}"
 }
 
 log "========================================="
-log "🔷 ANVIL FULL CHAIN + EXPLORER"
-log "========================================="
-log "⛓️  Chain ID: ${CHAIN_ID}"
-log "🧪 Features: Transfers, Swaps, Contracts, Explorer"
+log "🔷 ANVIL FORK + BALANCE PERSISTENCE"
 log "========================================="
 
-# Check dependencies
 for cmd in curl jq anvil; do
-    if ! command -v $cmd >/dev/null 2>&1; then
-        log "❌ Missing: $cmd"
-        exit 1
-    fi
+    command -v $cmd >/dev/null 2>&1 || { log "❌ Missing: $cmd"; exit 1; }
 done
-log "✅ Dependencies OK"
 
 # -------------------------------------------------------------------
-# Validate state file
-validate_state() {
-    [ -f "$1" ] && jq -e '.block' "$1" > /dev/null 2>&1
-}
-
+# DOWNLOAD STATE + BALANCES
 # -------------------------------------------------------------------
-# PHASE 1: DOWNLOAD STATE FROM JSONBIN
-# -------------------------------------------------------------------
-log "📥 Downloading previous state..."
+log "📥 Downloading saved data..."
 
 RESPONSE=$(curl -s --max-time 30 \
     "https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest" \
@@ -55,57 +44,94 @@ RESPONSE=$(curl -s --max-time 30 \
 if echo "$RESPONSE" | jq -e '.record' > /dev/null 2>&1; then
     RECORD=$(echo "$RESPONSE" | jq -r '.record')
     
-    if echo "$RECORD" | jq -e '.block' > /dev/null 2>&1; then
-        echo "$RECORD" > "${STATE_FILE}"
-    elif echo "$RECORD" | jq -e '.record.block' > /dev/null 2>&1; then
-        echo "$RECORD" | jq -r '.record' > "${STATE_FILE}"
-    else
-        log "⚠️ Unknown format, starting fresh"
-        rm -f "${STATE_FILE}"
-    fi
-    
-    if [ -f "${STATE_FILE}" ] && validate_state "${STATE_FILE}"; then
+    # Check format
+    if echo "$RECORD" | jq -e '.state' > /dev/null 2>&1; then
+        # New format with separate state and balances
+        echo "$RECORD" | jq -r '.state' > "${STATE_FILE}"
+        echo "$RECORD" | jq -r '.balances' > "${BALANCES_FILE}"
         STATE_LOADED="yes"
-        SIZE=$(wc -c < "${STATE_FILE}")
-        BLOCK=$(jq -r '.block.number // .block' "${STATE_FILE}" 2>/dev/null || echo "?")
-        ACCOUNTS=$(jq '.accounts | keys | length' "${STATE_FILE}" 2>/dev/null || echo "0")
-        TXS=$(jq '.transactions | length' "${STATE_FILE}" 2>/dev/null || echo "0")
-        log "✅ State loaded!"
-        log "   ⛓️  Block: ${BLOCK}"
-        log "   👛 Accounts: ${ACCOUNTS}"
-        log "   📝 Transactions: ${TXS}"
-        log "   💾 Size: ${SIZE} bytes"
+        BAL_COUNT=$(jq 'length' "${BALANCES_FILE}" 2>/dev/null || echo "0")
+        log "✅ State + ${BAL_COUNT} balances loaded"
+    elif echo "$RECORD" | jq -e '.block' > /dev/null 2>&1; then
+        # Old format - just state
+        echo "$RECORD" > "${STATE_FILE}"
+        echo '{}' > "${BALANCES_FILE}"
+        STATE_LOADED="yes"
+        log "✅ State loaded (no saved balances)"
     else
         rm -f "${STATE_FILE}"
+        echo '{}' > "${BALANCES_FILE}"
         STATE_LOADED="no"
-        log "⚠️ Invalid state"
+        log "⚠️ Unknown format"
     fi
 else
     STATE_LOADED="no"
-    log "🆕 No previous state - starting fresh chain"
+    echo '{}' > "${BALANCES_FILE}"
+    log "🆕 Fresh start"
 fi
 
 # -------------------------------------------------------------------
-# Upload state to JSONBin
-upload_state() {
-    if [ ! -f "${STATE_FILE}" ] || ! validate_state "${STATE_FILE}"; then
-        log "⚠️ No valid state to upload"
+# SAVE BALANCES FOR ALL MODIFIED WALLETS
+# -------------------------------------------------------------------
+save_balances() {
+    log "💾 Collecting wallet balances..."
+    
+    # Start JSON
+    echo '{' > "${BALANCES_FILE}.tmp"
+    FIRST=true
+    COUNT=0
+    
+    # Get all addresses with non-zero ETH balance (excluding Anvil defaults)
+    # We check the state file for modified accounts
+    if [ -f "${STATE_FILE}" ]; then
+        ADDRESSES=$(jq -r '.accounts | keys[]' "${STATE_FILE}" 2>/dev/null)
+        
+        for ADDR in $ADDRESSES; do
+            # Get ETH balance
+            ETH_BAL=$(rpc "eth_getBalance" "[\"${ADDR}\",\"latest\"]" | jq -r '.result // "0x0"')
+            
+            # Get USDT balance
+            USDT_DATA="0x70a08231000000000000000000000000${ADDR#0x}"
+            USDT_BAL=$(rpc "eth_call" "[{\"to\":\"${USDT}\",\"data\":\"${USDT_DATA}\"},\"latest\"]" | jq -r '.result // "0x0"')
+            
+            # Skip if both are zero
+            if [ "$ETH_BAL" != "0x0" ] && [ "$ETH_BAL" != "0x" ]; then
+                if [ "$FIRST" = true ]; then FIRST=false; else echo ',' >> "${BALANCES_FILE}.tmp"; fi
+                echo "\"${ADDR}\":{\"eth\":\"${ETH_BAL}\",\"usdt\":\"${USDT_BAL}\"}" >> "${BALANCES_FILE}.tmp"
+                COUNT=$((COUNT + 1))
+            fi
+        done
+    fi
+    
+    echo '}' >> "${BALANCES_FILE}.tmp"
+    mv "${BALANCES_FILE}.tmp" "${BALANCES_FILE}"
+    
+    log "   Saved ${COUNT} wallet balances"
+    return 0
+}
+
+# -------------------------------------------------------------------
+# UPLOAD STATE + BALANCES
+# -------------------------------------------------------------------
+upload_all() {
+    save_balances
+    
+    if [ ! -f "${STATE_FILE}" ]; then
+        log "⚠️ No state file"
         return 1
     fi
     
-    STATE_CONTENT=$(cat "${STATE_FILE}")
-    SIZE=$(wc -c < "${STATE_FILE}")
-    BLOCK=$(jq -r '.block.number // .block' "${STATE_FILE}" 2>/dev/null || echo "?")
-    ACCOUNTS=$(jq '.accounts | keys | length' "${STATE_FILE}" 2>/dev/null || echo "0")
+    COMBINED=$(jq -n --argfile state "${STATE_FILE}" --argfile balances "${BALANCES_FILE}" \
+        '{state: $state, balances: $balances}')
     
     RESPONSE=$(curl -s --max-time 30 -X PUT \
         "https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}" \
         -H "Content-Type: application/json" \
         -H "X-Master-Key: ${JSONBIN_API_KEY}" \
-        -d "{\"record\": ${STATE_CONTENT}}")
+        -d "{\"record\": ${COMBINED}}")
     
     if echo "$RESPONSE" | jq -e '.record' > /dev/null 2>&1; then
-        log "✅ Uploaded (Block: ${BLOCK}, Size: ${SIZE}, ${ACCOUNTS} accounts)"
+        log "✅ Uploaded to JSONBin"
         return 0
     else
         log "❌ Upload failed"
@@ -114,235 +140,115 @@ upload_state() {
 }
 
 # -------------------------------------------------------------------
-# Monitor new blocks and upload state
-monitor_and_save() {
-    log "👁️  Monitoring for new blocks..."
+# RESTORE BALANCES AFTER RESTART
+# -------------------------------------------------------------------
+restore_balances() {
+    if [ ! -f "${BALANCES_FILE}" ] || [ ! -s "${BALANCES_FILE}" ]; then
+        log "   No balances to restore"
+        return
+    fi
     
-    LAST_BLOCK="0x0"
+    log "🔄 Restoring wallet balances..."
     
-    while true; do
-        CURRENT_BLOCK=$(curl -s -X POST "http://localhost:${PORT}" \
-            -H "Content-Type: application/json" \
-            --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
-            | jq -r '.result // "0x0"')
+    WALLETS=$(jq -r 'keys[]' "${BALANCES_FILE}" 2>/dev/null)
+    RESTORED=0
+    
+    for ADDR in $WALLETS; do
+        ETH_BAL=$(jq -r ".\"${ADDR}\".eth" "${BALANCES_FILE}" 2>/dev/null)
+        USDT_BAL=$(jq -r ".\"${ADDR}\".usdt" "${BALANCES_FILE}" 2>/dev/null)
         
-        if [ "$CURRENT_BLOCK" != "$LAST_BLOCK" ] && [ "$CURRENT_BLOCK" != "0x0" ]; then
-            log "🔔 Block: ${LAST_BLOCK} → ${CURRENT_BLOCK}"
-            upload_state
-            LAST_BLOCK="$CURRENT_BLOCK"
+        # Restore ETH
+        if [ "$ETH_BAL" != "null" ] && [ "$ETH_BAL" != "0x0" ] && [ -n "$ETH_BAL" ]; then
+            rpc "anvil_setBalance" "[\"${ADDR}\",\"${ETH_BAL}\"]" > /dev/null 2>&1
         fi
         
+        # Restore USDT via storage manipulation
+        if [ "$USDT_BAL" != "null" ] && [ "$USDT_BAL" != "0x0" ] && [ -n "$USDT_BAL" ]; then
+            # USDT balanceOf storage slot for this address
+            # keccak256(address + uint256(2))
+            ADDR_NO0X=$(echo "${ADDR}" | sed 's/0x//' | tr '[:upper:]' '[:lower:]')
+            SLOT_PREIMAGE="000000000000000000000000${ADDR_NO0X}0000000000000000000000000000000000000000000000000000000000000002"
+            SLOT_HASH=$(echo -n "${SLOT_PREIMAGE}" | xxd -r -p | sha256sum | head -c 64)
+            
+            # Format balance to 32 bytes
+            BAL_HEX=$(echo "${USDT_BAL}" | sed 's/0x//')
+            BAL_PADDED=$(printf "%064s" "$BAL_HEX" | tr ' ' '0')
+            
+            rpc "anvil_setStorageAt" "[\"${USDT}\",\"0x${SLOT_HASH}\",\"0x${BAL_PADDED}\"]" > /dev/null 2>&1
+        fi
+        
+        RESTORED=$((RESTORED + 1))
+        log "   ✅ ${ADDR:0:10}...${ADDR: -6}"
+    done
+    
+    log "🎯 Restored ${RESTORED} wallets"
+}
+
+# -------------------------------------------------------------------
+# MONITOR & SAVE
+# -------------------------------------------------------------------
+monitor_and_save() {
+    LAST_BLOCK="0x0"
+    while true; do
+        CURRENT_BLOCK=$(rpc "eth_blockNumber" "[]" | jq -r '.result // "0x0"')
+        if [ "$CURRENT_BLOCK" != "$LAST_BLOCK" ] && [ "$CURRENT_BLOCK" != "0x0" ]; then
+            log "🔔 Block: ${LAST_BLOCK} → ${CURRENT_BLOCK}"
+            upload_all
+            LAST_BLOCK="$CURRENT_BLOCK"
+        fi
         sleep 2
     done
 }
 
-# -------------------------------------------------------------------
-# Graceful shutdown
 graceful_shutdown() {
-    log "⚠️ Shutdown signal... saving state..."
-    upload_state
+    log "⚠️ Shutdown... saving..."
+    upload_all
     log "👋 Done"
     exit 0
 }
 
 # -------------------------------------------------------------------
-# RPC helper
-rpc() {
-    curl -s -X POST "http://localhost:${PORT}" \
-        -H "Content-Type: application/json" \
-        --data "{\"jsonrpc\":\"2.0\",\"method\":\"$1\",\"params\":$2,\"id\":1}"
-}
-
-# -------------------------------------------------------------------
-# PHASE 2: LAUNCH ANVIL WITH EXPLORER
+# LAUNCH ANVIL
 # -------------------------------------------------------------------
 log "========================================="
-log "🚀 LAUNCHING ANVIL FULL CHAIN"
+log "🚀 LAUNCHING FORK"
 log "========================================="
 
-# Deploy Uniswap V2 contracts for swap functionality
-DEPLOY_UNISWAP=""
+CMD="anvil --fork-url ${FORK_URL} --chain-id ${CHAIN_ID} --host 0.0.0.0 --port ${PORT} --state ${STATE_FILE}"
 
-CMD="anvil"
-CMD="${CMD} --chain-id ${CHAIN_ID}"
-CMD="${CMD} --host 0.0.0.0"
-CMD="${CMD} --port ${PORT}"
-CMD="${CMD} --state ${STATE_FILE}"
-CMD="${CMD} --block-time 2"  # 2 second block time like real chain
-CMD="${CMD} --gas-limit 30000000"  # High gas limit for complex transactions
+[ "${STATE_LOADED}" = "yes" ] && log "📂 Resuming from saved state" || log "🆕 Fresh fork"
 
-if [ "${STATE_LOADED}" = "yes" ] && [ -f "${STATE_FILE}" ]; then
-    log "📂 Resuming from saved state"
-else
-    log "🆕 Starting fresh chain"
-fi
-
-log "🔧 Command: ${CMD}"
 $CMD &
 ANVIL_PID=$!
 log "✅ Anvil PID: ${ANVIL_PID}"
 
-# -------------------------------------------------------------------
-# PHASE 3: WAIT FOR ANVIL
-# -------------------------------------------------------------------
-log "⏳ Waiting for Anvil to be ready..."
-sleep 3
-
+# Wait for ready
+sleep 5
 for i in $(seq 1 20); do
-    if rpc "eth_blockNumber" "[]" | jq -e '.result' > /dev/null 2>&1; then
-        log "✅ Anvil is ready"
-        break
-    fi
+    rpc "eth_blockNumber" "[]" | jq -e '.result' > /dev/null 2>&1 && break
     sleep 2
 done
 
 # -------------------------------------------------------------------
-# PHASE 4: CHAIN INFO & ACCOUNTS
+# RESTORE BALANCES
 # -------------------------------------------------------------------
-log "========================================="
-log "⛓️  CHAIN INFORMATION"
-log "========================================="
-log "📡 RPC Endpoint: https://anvil-render-q5wl.onrender.com"
-log "🔍 Explorer: https://anvil-render-q5wl.onrender.com (built-in)"
-log "⛓️  Chain ID: ${CHAIN_ID}"
-log "🧱 Block Time: 2 seconds"
-log "⛽ Gas Limit: 30,000,000"
-log ""
-
-if [ "${STATE_LOADED}" != "yes" ]; then
-    log "🎁 DEFAULT ACCOUNTS (10,000 ETH each):"
-    log "   Use these for testing transfers and swaps"
-    log "========================================="
-    
-    # Show available accounts with private keys
-    log ""
-    log "📋 Account #0:"
-    log "   Address:  0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-    log "   Private:  0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-    log "   Balance:  10,000 ETH"
-    log ""
-    log "📋 Account #1:"
-    log "   Address:  0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
-    log "   Private:  0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
-    log "   Balance:  10,000 ETH"
-    log ""
-    log "📋 Account #2:"
-    log "   Address:  0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
-    log "   Private:  0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"
-    log "   Balance:  10,000 ETH"
-    log ""
-    log "... (9 more accounts available)"
-fi
+restore_balances
 
 # -------------------------------------------------------------------
-# PHASE 5: EXPLORER INFO
+# START SYNC
 # -------------------------------------------------------------------
-log "========================================="
-log "🔍 EXPLORER ACCESS"
-log "========================================="
-log "Anvil has a built-in explorer at your RPC URL."
-log ""
-log "To use it like Etherscan:"
-log ""
-log "1. Check transaction:"
-log "   curl -X POST https://anvil-render-q5wl.onrender.com \\"
-log "     -H 'Content-Type: application/json' \\"
-log "     --data '{\"jsonrpc\":\"2.0\",\"method\":\"eth_getTransactionByHash\",\"params\":[\"TX_HASH\"],\"id\":1}'"
-log ""
-log "2. Check block:"
-log "   curl -X POST https://anvil-render-q5wl.onrender.com \\"
-log "     -H 'Content-Type: application/json' \\"
-log "     --data '{\"jsonrpc\":\"2.0\",\"method\":\"eth_getBlockByNumber\",\"params\":[\"BLOCK_HEX\",true],\"id\":1}'"
-log ""
-log "3. Check balance:"
-log "   curl -X POST https://anvil-render-q5wl.onrender.com \\"
-log "     -H 'Content-Type: application/json' \\"
-log "     --data '{\"jsonrpc\":\"2.0\",\"method\":\"eth_getBalance\",\"params\":[\"ADDRESS\",\"latest\"],\"id\":1}'"
-log ""
-log "4. Get transaction count:"
-log "   curl -X POST https://anvil-render-q5wl.onrender.com \\"
-log "     -H 'Content-Type: application/json' \\"
-log "     --data '{\"jsonrpc\":\"2.0\",\"method\":\"eth_getTransactionCount\",\"params\":[\"ADDRESS\",\"latest\"],\"id\":1}'"
-log ""
-
-# -------------------------------------------------------------------
-# PHASE 6: HOW TO USE (TRANSFERS, SWAPS, CONTRACTS)
-# -------------------------------------------------------------------
-log "========================================="
-log "📖 HOW TO USE THIS CHAIN"
-log "========================================="
-log ""
-log "💸 SEND ETH TO ANOTHER WALLET:"
-log "   curl -X POST https://anvil-render-q5wl.onrender.com \\"
-log "     -H 'Content-Type: application/json' \\"
-log "     --data '{"
-log "       \"jsonrpc\":\"2.0\","
-log "       \"method\":\"eth_sendTransaction\","
-log "       \"params\":[{"
-log "         \"from\":\"SENDER_ADDRESS\","
-log "         \"to\":\"RECIPIENT_ADDRESS\","
-log "         \"value\":\"0xDE0B6B3A7640000\""
-log "       }],"
-log "       \"id\":1"
-log "     }'"
-log ""
-log "🔑 IMPERSONATE ANY WALLET:"
-log "   curl -X POST https://anvil-render-q5wl.onrender.com \\"
-log "     -H 'Content-Type: application/json' \\"
-log "     --data '{\"jsonrpc\":\"2.0\",\"method\":\"anvil_impersonateAccount\",\"params\":[\"ADDRESS\"],\"id\":1}'"
-log ""
-log "💰 SET ANY WALLET BALANCE:"
-log "   curl -X POST https://anvil-render-q5wl.onrender.com \\"
-log "     -H 'Content-Type: application/json' \\"
-log "     --data '{\"jsonrpc\":\"2.0\",\"method\":\"anvil_setBalance\",\"params\":[\"ADDRESS\",\"0x56BC75E2D63100000\"],\"id\":1}'"
-log ""
-log "🔄 DEPLOY CONTRACT:"
-log "   curl -X POST https://anvil-render-q5wl.onrender.com \\"
-log "     -H 'Content-Type: application/json' \\"
-log "     --data '{"
-log "       \"jsonrpc\":\"2.0\","
-log "       \"method\":\"eth_sendTransaction\","
-log "       \"params\":[{"
-log "         \"from\":\"DEPLOYER_ADDRESS\","
-log "         \"data\":\"CONTRACT_BYTECODE\""
-log "       }],"
-log "       \"id\":1"
-log "     }'"
-log ""
-
-# -------------------------------------------------------------------
-# PHASE 7: START MONITORING
-# -------------------------------------------------------------------
-log "========================================="
-log "🟢 STARTING STATE SYNC"
-log "========================================="
-
 trap graceful_shutdown SIGTERM SIGINT
-
-# Initial save
 sleep 2
-upload_state
-
-# Start monitoring
+upload_all
 monitor_and_save &
 MONITOR_PID=$!
 
 log "========================================="
-log "🎯 CHAIN IS LIVE"
+log "🎯 READY"
 log "========================================="
-log ""
 log "📡 RPC: https://anvil-render-q5wl.onrender.com"
-log "🔍 Explorer: Use eth_getTransactionByHash, eth_getBlockByNumber, etc."
-log "⛓️  Chain ID: ${CHAIN_ID}"
-log "⏱️  Block Time: 2 seconds"
-log "💾 State: Saved to JSONBin after every block"
-log "🔒 ALL balances survive restarts"
-log ""
-log "✅ Ready for:"
-log "   - ETH transfers between wallets"
-log "   - Token swaps (deploy Uniswap contracts)"
-log "   - Smart contract deployment"
-log "   - Full blockchain operations"
+log "💵 USDT: ${USDT}"
+log "🔒 Balances survive restarts"
 log "========================================="
 
 wait $ANVIL_PID
