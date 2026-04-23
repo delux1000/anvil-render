@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # -------------------------------------------------------------------
-# Anvil + JSONBin.io Persistence Entrypoint (INSTANT UPLOAD - FIXED)
-# Uploads state to JSONBin after EVERY transaction
+# Anvil + JSONBin.io Persistence (BALANCE PERSISTENCE FIX)
+# Saves wallet balances separately and restores them after restart
 # -------------------------------------------------------------------
 
 # Hardcoded configuration
@@ -12,6 +12,7 @@ FORK_URL="https://eth-mainnet.g.alchemy.com/v2/QFjExKnnaI2I4qTV7EFM7WwB0gl08X0n"
 CHAIN_ID="1"
 PORT="8545"
 STATE_FILE="/tmp/state.json"
+BALANCES_FILE="/tmp/balances.json"
 
 # -------------------------------------------------------------------
 # Logging
@@ -20,8 +21,15 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
 }
 
+# RPC helper
+rpc() {
+    curl -s -X POST "http://localhost:${PORT}" \
+        -H "Content-Type: application/json" \
+        --data "{\"jsonrpc\":\"2.0\",\"method\":\"$1\",\"params\":$2,\"id\":1}"
+}
+
 log "========================================="
-log "🔷 ANVIL PERSISTENCE (INSTANT UPLOAD)"
+log "🔷 ANVIL PERSISTENCE (BALANCE FIX)"
 log "========================================="
 
 # Check dependencies
@@ -34,58 +42,101 @@ done
 log "✅ Dependencies OK"
 
 # -------------------------------------------------------------------
-# Validate state file
-validate_state() {
-    [ -f "$1" ] && jq -e '.block' "$1" > /dev/null 2>&1
-}
-
-# -------------------------------------------------------------------
-# PHASE 1: DOWNLOAD STATE
+# Download state + balances from JSONBin
 # -------------------------------------------------------------------
 log "📥 Downloading previous state..."
-RESPONSE=$(curl -s --max-time 30 \
+
+# Download state
+STATE_RESPONSE=$(curl -s --max-time 30 \
     "https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest" \
     -H "X-Master-Key: ${JSONBIN_API_KEY}")
 
-if echo "$RESPONSE" | jq -e '.record' > /dev/null 2>&1; then
-    echo "$RESPONSE" | jq -r '.record' > "${STATE_FILE}"
-    if validate_state "${STATE_FILE}"; then
+if echo "$STATE_RESPONSE" | jq -e '.record' > /dev/null 2>&1; then
+    # Extract the full record
+    echo "$STATE_RESPONSE" | jq -r '.record' > /tmp/full_record.json
+    
+    # Check if it contains both state and balances
+    if jq -e '.state' /tmp/full_record.json > /dev/null 2>&1; then
+        # New format: separate state and balances
+        jq -r '.state' /tmp/full_record.json > "${STATE_FILE}"
+        jq -r '.balances' /tmp/full_record.json > "${BALANCES_FILE}"
         STATE_LOADED="yes"
-        SIZE=$(wc -c < "${STATE_FILE}")
-        BLOCK=$(jq -r '.block.number // .block' "${STATE_FILE}" 2>/dev/null || echo "?")
-        WALLET_COUNT=$(jq '.accounts | keys | length' "${STATE_FILE}" 2>/dev/null || echo "0")
-        log "✅ State loaded (Block: ${BLOCK}, Size: ${SIZE} bytes, ${WALLET_COUNT} wallets)"
+        log "✅ State + balances loaded"
+        BALANCE_COUNT=$(jq 'length' "${BALANCES_FILE}" 2>/dev/null || echo "0")
+        log "👛 Saved balances: ${BALANCE_COUNT} wallets"
+    elif jq -e '.block' /tmp/full_record.json > /dev/null 2>&1; then
+        # Old format: just state
+        cp /tmp/full_record.json "${STATE_FILE}"
+        echo '{}' > "${BALANCES_FILE}"
+        STATE_LOADED="yes"
+        log "✅ State loaded (old format, no saved balances)"
     else
-        rm -f "${STATE_FILE}"
         STATE_LOADED="no"
-        log "⚠️ State invalid - starting fresh"
+        echo '{}' > "${BALANCES_FILE}"
+        log "⚠️ Unknown format"
     fi
 else
     STATE_LOADED="no"
-    log "🆕 No previous state"
+    echo '{}' > "${BALANCES_FILE}"
+    log "🆕 Fresh start"
 fi
 
 # -------------------------------------------------------------------
-# Upload to JSONBin
+# Upload state + balances to JSONBin
 # -------------------------------------------------------------------
-upload_state() {
-    if [ ! -f "${STATE_FILE}" ] || ! validate_state "${STATE_FILE}"; then
-        log "⚠️ No valid state file to upload"
+upload_all() {
+    log "💾 Saving state + balances..."
+    
+    # Wait for Anvil
+    sleep 1
+    
+    # Get current state file (written by Anvil's --state flag)
+    if [ ! -f "${STATE_FILE}" ]; then
+        log "⚠️ No state file"
         return 1
     fi
     
     STATE_CONTENT=$(cat "${STATE_FILE}")
-    SIZE=$(wc -c < "${STATE_FILE}")
-    ACCOUNTS=$(jq '.accounts | keys | length' "${STATE_FILE}" 2>/dev/null || echo "0")
     
+    # Collect all wallet balances we care about
+    echo '{' > "${BALANCES_FILE}"
+    FIRST=true
+    
+    # Get all addresses from state file
+    ADDRESSES=$(jq -r '.accounts | keys[]' "${STATE_FILE}" 2>/dev/null)
+    
+    for ADDR in $ADDRESSES; do
+        # Get ETH balance
+        ETH_BAL=$(rpc "eth_getBalance" "[\"${ADDR}\",\"latest\"]" | jq -r '.result // "0x0"')
+        
+        # Skip zero balances
+        if [ "$ETH_BAL" != "0x0" ] && [ "$ETH_BAL" != "0x" ]; then
+            if [ "$FIRST" = true ]; then
+                FIRST=false
+            else
+                echo ',' >> "${BALANCES_FILE}"
+            fi
+            echo "\"${ADDR}\":{\"eth\":\"${ETH_BAL}\"}" >> "${BALANCES_FILE}"
+        fi
+    done
+    echo '}' >> "${BALANCES_FILE}"
+    
+    BALANCE_COUNT=$(jq 'length' "${BALANCES_FILE}" 2>/dev/null || echo "0")
+    log "   Collected ${BALANCE_COUNT} non-zero ETH balances"
+    
+    # Combine state and balances into one record
+    COMBINED=$(jq -n --argfile state "${STATE_FILE}" --argfile balances "${BALANCES_FILE}" \
+        '{state: $state, balances: $balances}')
+    
+    # Upload
     RESPONSE=$(curl -s --max-time 30 -X PUT \
         "https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}" \
         -H "Content-Type: application/json" \
         -H "X-Master-Key: ${JSONBIN_API_KEY}" \
-        -d "{\"record\": ${STATE_CONTENT}}")
+        -d "{\"record\": ${COMBINED}}")
     
     if echo "$RESPONSE" | jq -e '.record' > /dev/null 2>&1; then
-        log "✅ Uploaded (${SIZE} bytes, ${ACCOUNTS} wallets)"
+        log "✅ Uploaded state + ${BALANCE_COUNT} balances"
         return 0
     else
         log "❌ Upload failed"
@@ -94,25 +145,50 @@ upload_state() {
 }
 
 # -------------------------------------------------------------------
-# Monitor transactions and upload after each one
+# Restore balances after restart
+# -------------------------------------------------------------------
+restore_balances() {
+    if [ ! -f "${BALANCES_FILE}" ] || [ ! -s "${BALANCES_FILE}" ]; then
+        log "   No saved balances to restore"
+        return
+    fi
+    
+    log "🔄 Restoring saved balances..."
+    
+    WALLETS=$(jq -r 'keys[]' "${BALANCES_FILE}" 2>/dev/null)
+    RESTORED=0
+    
+    for ADDR in $WALLETS; do
+        ETH_BAL=$(jq -r ".\"${ADDR}\".eth" "${BALANCES_FILE}" 2>/dev/null)
+        
+        if [ -n "$ETH_BAL" ] && [ "$ETH_BAL" != "null" ] && [ "$ETH_BAL" != "0x0" ]; then
+            # Set the balance using anvil_setBalance
+            RESULT=$(rpc "anvil_setBalance" "[\"${ADDR}\",\"${ETH_BAL}\"]")
+            
+            if echo "$RESULT" | jq -e '.result == null' > /dev/null 2>&1; then
+                RESTORED=$((RESTORED + 1))
+                log "   ✅ Restored ${ADDR:0:10}...${ADDR: -6}: ${ETH_BAL}"
+            fi
+        fi
+    done
+    
+    log "🎯 Restored ${RESTORED} wallet balances"
+}
+
+# -------------------------------------------------------------------
+# Monitor and upload after each transaction
 # -------------------------------------------------------------------
 monitor_and_save() {
-    log "👁️  Monitoring transactions (checks every 2s)..."
+    log "👁️  Monitoring transactions..."
     
     LAST_BLOCK="0x0"
     
     while true; do
-        # Get current block from Anvil
-        CURRENT_BLOCK=$(curl -s -X POST "http://localhost:${PORT}" \
-            -H "Content-Type: application/json" \
-            --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
-            | jq -r '.result // "0x0"')
+        CURRENT_BLOCK=$(rpc "eth_blockNumber" "[]" | jq -r '.result // "0x0"')
         
-        # If block changed, upload the state
         if [ "$CURRENT_BLOCK" != "$LAST_BLOCK" ] && [ "$CURRENT_BLOCK" != "0x0" ]; then
             log "🔔 New block: ${LAST_BLOCK} → ${CURRENT_BLOCK}"
-            log "💾 Uploading state..."
-            upload_state
+            upload_all
             LAST_BLOCK="$CURRENT_BLOCK"
         fi
         
@@ -121,12 +197,11 @@ monitor_and_save() {
 }
 
 # -------------------------------------------------------------------
-# Shutdown handler
+# Shutdown
 # -------------------------------------------------------------------
 graceful_shutdown() {
     log "⚠️ Shutdown..."
-    log "💾 Final upload..."
-    upload_state
+    upload_all
     log "👋 Done"
     exit 0
 }
@@ -138,45 +213,37 @@ log "========================================="
 log "🚀 LAUNCHING ANVIL"
 log "========================================="
 
-# Build command with --state and --state-interval for frequent saves
-CMD="anvil"
-CMD="${CMD} --fork-url ${FORK_URL}"
-CMD="${CMD} --chain-id ${CHAIN_ID}"
-CMD="${CMD} --host 0.0.0.0"
-CMD="${CMD} --port ${PORT}"
-CMD="${CMD} --state ${STATE_FILE}"
-CMD="${CMD} --state-interval 1"  # Write state to disk every 1 second!
+CMD="anvil --fork-url ${FORK_URL} --chain-id ${CHAIN_ID} --host 0.0.0.0 --port ${PORT} --state ${STATE_FILE} --state-interval 1"
 
 if [ "${STATE_LOADED}" = "yes" ]; then
-    log "📂 Launching with persisted state"
+    log "📂 Using persisted state"
 else
-    log "🆕 Launching fresh"
+    log "🆕 Fresh start"
 fi
 
-log "🔧 ${CMD}"
 $CMD &
 ANVIL_PID=$!
 log "✅ Anvil PID: ${ANVIL_PID}"
 
 # -------------------------------------------------------------------
-# PHASE 3: WAIT & START MONITORING
+# PHASE 3: WAIT + RESTORE BALANCES
 # -------------------------------------------------------------------
 log "⏳ Waiting for Anvil..."
-sleep 3
+sleep 5
 
 for i in $(seq 1 20); do
-    if curl -s -X POST "http://localhost:${PORT}" \
-        -H "Content-Type: application/json" \
-        --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
-        | jq -e '.result' > /dev/null 2>&1; then
+    if rpc "eth_blockNumber" "[]" | jq -e '.result' > /dev/null 2>&1; then
         log "✅ Anvil ready"
         break
     fi
     sleep 2
 done
 
+# 🔥 RESTORE SAVED BALANCES 🔥
+restore_balances
+
 # -------------------------------------------------------------------
-# PHASE 4: START SERVICES
+# PHASE 4: START MONITORING
 # -------------------------------------------------------------------
 log "========================================="
 log "🟢 STARTING MONITOR"
@@ -184,12 +251,9 @@ log "========================================="
 
 trap graceful_shutdown SIGTERM SIGINT
 
-# Initial upload
-log "💾 Initial state upload..."
-sleep 2  # Let Anvil write first state
-upload_state
+sleep 2
+upload_all
 
-# Start monitoring
 monitor_and_save &
 MONITOR_PID=$!
 
@@ -197,8 +261,8 @@ log "========================================="
 log "🎯 SYSTEM READY"
 log "========================================="
 log "📡 RPC: https://anvil-render-q5wl.onrender.com"
-log "💾 State: Saved after every transaction"
-log "🔒 All balances preserved"
+log "💾 Balances saved + restored every restart"
+log "🔒 All wallets protected"
 log "========================================="
 
 wait $ANVIL_PID
