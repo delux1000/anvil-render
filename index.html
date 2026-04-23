@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AnvilScan - Block Explorer</title>
+    <style>
+        :root {
+            --bg: #0a0e17;
+            --card: #111827;
+            --border: #1e293b;
+            --text: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --green: #10b981;
+            --red: #ef4444;
+            --orange: #f59e0b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            padding: 0 24px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .logo span {
+            color: var(--accent);
+        }
+
+        .network-badge {
+            background: var(--accent);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        /* Search */
+        .search-container {
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            padding: 32px 24px;
+            text-align: center;
+        }
+
+        .search-container h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .search-container p {
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+
+        .search-box {
+            display: flex;
+            max-width: 700px;
+            margin: 0 auto;
+            gap: 8px;
+        }
+
+        .search-box input {
+            flex: 1;
+            padding: 14px 20px;
+            background: var(--bg);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            color: var(--text);
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .search-box input:focus {
+            border-color: var(--accent);
+        }
+
+        .search-box input::placeholder {
+            color: #475569;
+        }
+
+        .search-box button {
+            padding: 14px 28px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .search-box button:hover {
+            background: var(--accent-hover);
+        }
+
+        /* Stats */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            padding: 24px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .stat-card .label {
+            color: var(--text-secondary);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .stat-card .value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .stat-card .value.small {
+            font-size: 16px;
+        }
+
+        /* Content */
+        .content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px 40px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--border);
+        }
+
+        /* Table */
+        .table-container {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #1a2236;
+            padding: 14px 16px;
+            text-align: left;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        td {
+            padding: 14px 16px;
+            border-top: 1px solid var(--border);
+            font-size: 14px;
+        }
+
+        .address {
+            color: var(--accent);
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        .hash {
+            color: var(--accent);
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .hash:hover {
+            text-decoration: underline;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background: #065f46;
+            color: #6ee7b7;
+        }
+
+        .badge-pending {
+            background: #78350f;
+            color: #fbbf24;
+        }
+
+        /* Result Card */
+        .result-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            display: none;
+        }
+
+        .result-card.active {
+            display: block;
+        }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .result-row:last-child {
+            border-bottom: none;
+        }
+
+        .result-label {
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .result-value {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            word-break: break-all;
+            text-align: right;
+            max-width: 60%;
+        }
+
+        .result-value a {
+            color: var(--accent);
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            border: 3px solid var(--border);
+            border-top: 3px solid var(--accent);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Error */
+        .error {
+            background: #450a0a;
+            color: #fca5a5;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .error.active {
+            display: block;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 24px;
+            color: var(--text-secondary);
+            font-size: 12px;
+            border-top: 1px solid var(--border);
+        }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            .search-box {
+                flex-direction: column;
+            }
+            .stats {
+                grid-template-columns: 1fr 1fr;
+            }
+            .address, .hash {
+                font-size: 11px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="logo">🔍 Anvil<span>Scan</span></div>
+        <div>
+            <span class="network-badge" id="networkBadge">⛓️ Chain ID: 1</span>
+        </div>
+    </div>
+
+    <!-- Search -->
+    <div class="search-container">
+        <h1>The Anvil Blockchain Explorer</h1>
+        <p>Search by Address, Transaction Hash, or Block Number</p>
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Enter Address / Tx Hash / Block Number...">
+            <button onclick="search()">🔍 Search</button>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats">
+        <div class="stat-card">
+            <div class="label">Latest Block</div>
+            <div class="value" id="latestBlock">Loading...</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Chain ID</div>
+            <div class="value">1</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">RPC Endpoint</div>
+            <div class="value small" style="word-break: break-all;">anvil-render-q5wl.onrender.com</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Status</div>
+            <div class="value" style="color: var(--green);" id="statusIndicator">● Online</div>
+        </div>
+    </div>
+
+    <!-- Error -->
+    <div class="content">
+        <div class="error" id="errorBox"></div>
+    </div>
+
+    <!-- Search Result -->
+    <div class="content">
+        <div class="result-card" id="resultCard"></div>
+    </div>
+
+    <!-- Latest Blocks -->
+    <div class="content">
+        <div class="section-title">📦 Latest Blocks</div>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Block</th>
+                        <th>Age</th>
+                        <th>Tx Count</th>
+                        <th>Gas Used</th>
+                        <th>Gas Limit</th>
+                    </tr>
+                </thead>
+                <tbody id="blocksTable">
+                    <tr><td colspan="5" class="loading"><div class="spinner"></div>Loading blocks...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Latest Transactions -->
+    <div class="content">
+        <div class="section-title">💸 Latest Transactions</div>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tx Hash</th>
+                        <th>Block</th>
+                        <th>From</th>
+                        <th>To</th>
+                        <th>Value (ETH)</th>
+                    </tr>
+                </thead>
+                <tbody id="txTable">
+                    <tr><td colspan="5" class="loading"><div class="spinner"></div>Loading transactions...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        AnvilScan - Powered by Anvil JSON-RPC | RPC: https://anvil-render-q5wl.onrender.com
+    </div>
+
+    <script>
+        const RPC_URL = 'https://anvil-render-q5wl.onrender.com';
+
+        async function rpcCall(method, params = []) {
+            const response = await fetch(RPC_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    method: method,
+                    params: params,
+                    id: 1
+                })
+            });
+            const data = await response.json();
+            if (data.error) throw new Error(data.error.message);
+            return data.result;
+        }
+
+        function shortenAddress(addr) {
+            if (!addr || addr === '0x0000000000000000000000000000000000000000') return 'Contract Creation';
+            return addr.slice(0, 6) + '...' + addr.slice(-4);
+        }
+
+        function weiToEth(wei) {
+            return (parseInt(wei, 16) / 1e18).toFixed(4);
+        }
+
+        function showError(msg) {
+            const box = document.getElementById('errorBox');
+            box.textContent = msg;
+            box.classList.add('active');
+            setTimeout(() => box.classList.remove('active'), 5000);
+        }
+
+        // Load stats
+        async function loadStats() {
+            try {
+                const block = await rpcCall('eth_blockNumber');
+                document.getElementById('latestBlock').textContent = parseInt(block, 16).toLocaleString();
+                document.getElementById('statusIndicator').textContent = '● Online';
+                document.getElementById('statusIndicator').style.color = 'var(--green)';
+            } catch (e) {
+                document.getElementById('statusIndicator').textContent = '● Offline';
+                document.getElementById('statusIndicator').style.color = 'var(--red)';
+            }
+        }
+
+        // Load latest blocks
+        async function loadBlocks() {
+            try {
+                const latestBlockHex = await rpcCall('eth_blockNumber');
+                const latestBlock = parseInt(latestBlockHex, 16);
+                const tbody = document.getElementById('blocksTable');
+                tbody.innerHTML = '';
+
+                for (let i = 0; i < 8; i++) {
+                    const blockNum = latestBlock - i;
+                    if (blockNum < 0) break;
+                    
+                    const blockHex = '0x' + blockNum.toString(16);
+                    const block = await rpcCall('eth_getBlockByNumber', [blockHex, false]);
+                    
+                    const txCount = block.transactions.length;
+                    const gasUsed = parseInt(block.gasUsed, 16).toLocaleString();
+                    const gasLimit = parseInt(block.gasLimit, 16).toLocaleString();
+                    const age = i === 0 ? '<span class="badge badge-success">Latest</span>' : (i * 2) + 's ago';
+
+                    tbody.innerHTML += `
+                        <tr>
+                            <td><span class="hash" onclick="searchBlock(${blockNum})">#${blockNum.toLocaleString()}</span></td>
+                            <td>${age}</td>
+                            <td>${txCount}</td>
+                            <td>${gasUsed}</td>
+                            <td>${gasLimit}</td>
+                        </tr>
+                    `;
+                }
+            } catch (e) {
+                document.getElementById('blocksTable').innerHTML = 
+                    '<tr><td colspan="5" style="color: var(--red); text-align:center;">Failed to load blocks</td></tr>';
+            }
+        }
+
+        // Load latest transactions
+        async function loadTransactions() {
+            try {
+                const latestBlockHex = await rpcCall('eth_blockNumber');
+                const latestBlock = parseInt(latestBlockHex, 16);
+                const tbody = document.getElementById('txTable');
+                tbody.innerHTML = '';
+
+                let txCount = 0;
+                for (let i = 0; i < 5 && txCount < 6; i++) {
+                    const blockNum = latestBlock - i;
+                    if (blockNum < 0) break;
+                    
+                    const blockHex = '0x' + blockNum.toString(16);
+                    const block = await rpcCall('eth_getBlockByNumber', [blockHex, true]);
+                    
+                    if (block && block.transactions) {
+                        for (const tx of block.transactions.slice(0, 2)) {
+                            if (txCount >= 6) break;
+                            
+                            const valueETH = weiToEth(tx.value || '0x0');
+                            
+                            tbody.innerHTML += `
+                                <tr>
+                                    <td><span class="hash" onclick="searchTx('${tx.hash}')">${shortenAddress(tx.hash)}</span></td>
+                                    <td><span class="hash" onclick="searchBlock(${blockNum})">#${blockNum.toLocaleString()}</span></td>
+                                    <td><span class="address">${shortenAddress(tx.from)}</span></td>
+                                    <td><span class="address">${shortenAddress(tx.to)}</span></td>
+                                    <td>${valueETH}</td>
+                                </tr>
+                            `;
+                            txCount++;
+                        }
+                    }
+                }
+                
+                if (txCount === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--text-secondary);">No transactions yet</td></tr>';
+                }
+            } catch (e) {
+                document.getElementById('txTable').innerHTML = 
+                    '<tr><td colspan="5" style="color: var(--red); text-align:center;">Failed to load transactions</td></tr>';
+            }
+        }
+
+        // Search
+        async function search() {
+            const input = document.getElementById('searchInput').value.trim();
+            if (!input) return;
+
+            const card = document.getElementById('resultCard');
+            card.innerHTML = '<div class="loading"><div class="spinner"></div>Searching...</div>';
+            card.classList.add('active');
+
+            try {
+                // Try as block number
+                if (/^\d+$/.test(input)) {
+                    await searchBlock(parseInt(input));
+                    return;
+                }
+
+                // Try as transaction hash
+                if (input.length === 66 && input.startsWith('0x')) {
+                    await searchTx(input);
+                    return;
+                }
+
+                // Try as address
+                if (input.length === 42 && input.startsWith('0x')) {
+                    await searchAddress(input);
+                    return;
+                }
+
+                // Try as block hash
+                if (input.length === 66 && input.startsWith('0x')) {
+                    await searchBlockByHash(input);
+                    return;
+                }
+
+                showError('Invalid input. Enter an address, tx hash, or block number.');
+                card.classList.remove('active');
+            } catch (e) {
+                card.innerHTML = `<div style="color: var(--red); text-align:center; padding:20px;">Not found: ${e.message}</div>`;
+            }
+        }
+
+        async function searchBlock(num) {
+            const blockHex = '0x' + num.toString(16);
+            const block = await rpcCall('eth_getBlockByNumber', [blockHex, true]);
+            displayBlock(block);
+        }
+
+        async function searchBlockByHash(hash) {
+            const block = await rpcCall('eth_getBlockByHash', [hash, true]);
+            displayBlock(block);
+        }
+
+        function displayBlock(block) {
+            if (!block) throw new Error('Block not found');
+            
+            const card = document.getElementById('resultCard');
+            card.innerHTML = `
+                <h3 style="margin-bottom:20px;">📦 Block #${parseInt(block.number, 16).toLocaleString()}</h3>
+                <div class="result-row"><span class="result-label">Block Hash</span><span class="result-value">${block.hash}</span></div>
+                <div class="result-row"><span class="result-label">Timestamp</span><span class="result-value">${new Date(parseInt(block.timestamp, 16) * 1000).toLocaleString()}</span></div>
+                <div class="result-row"><span class="result-label">Transactions</span><span class="result-value">${block.transactions.length}</span></div>
+                <div class="result-row"><span class="result-label">Gas Used</span><span class="result-value">${parseInt(block.gasUsed, 16).toLocaleString()}</span></div>
+                <div class="result-row"><span class="result-label">Gas Limit</span><span class="result-value">${parseInt(block.gasLimit, 16).toLocaleString()}</span></div>
+                <div class="result-row"><span class="result-label">Miner</span><span class="result-value address">${block.miner}</span></div>
+            `;
+            card.classList.add('active');
+        }
+
+        async function searchTx(hash) {
+            const tx = await rpcCall('eth_getTransactionByHash', [hash]);
+            if (!tx) throw new Error('Transaction not found');
+            
+            const receipt = await rpcCall('eth_getTransactionReceipt', [hash]);
+            
+            const card = document.getElementById('resultCard');
+            card.innerHTML = `
+                <h3 style="margin-bottom:20px;">💸 Transaction</h3>
+                <div class="result-row"><span class="result-label">Tx Hash</span><span class="result-value">${tx.hash}</span></div>
+                <div class="result-row"><span class="result-label">Status</span><span class="result-value">${receipt && receipt.status === '0x1' ? '<span class="badge badge-success">Success</span>' : '<span class="badge badge-pending">Pending</span>'}</span></div>
+                <div class="result-row"><span class="result-label">Block</span><span class="result-value hash" onclick="searchBlock(${parseInt(tx.blockNumber, 16)})">#${parseInt(tx.blockNumber, 16).toLocaleString()}</span></div>
+                <div class="result-row"><span class="result-label">From</span><span class="result-value address" onclick="searchAddress('${tx.from}')">${tx.from}</span></div>
+                <div class="result-row"><span class="result-label">To</span><span class="result-value address" onclick="searchAddress('${tx.to}')">${tx.to || 'Contract Creation'}</span></div>
+                <div class="result-row"><span class="result-label">Value</span><span class="result-value">${weiToEth(tx.value)} ETH</span></div>
+                <div class="result-row"><span class="result-label">Gas Price</span><span class="result-value">${parseInt(tx.gasPrice, 16).toLocaleString()} wei</span></div>
+                <div class="result-row"><span class="result-label">Gas Used</span><span class="result-value">${receipt ? parseInt(receipt.gasUsed, 16).toLocaleString() : 'Pending'}</span></div>
+            `;
+            card.classList.add('active');
+        }
+
+        async function searchAddress(addr) {
+            const balance = await rpcCall('eth_getBalance', [addr, 'latest']);
+            const txCount = await rpcCall('eth_getTransactionCount', [addr, 'latest']);
+            
+            const card = document.getElementById('resultCard');
+            card.innerHTML = `
+                <h3 style="margin-bottom:20px;">👛 Address</h3>
+                <div class="result-row"><span class="result-label">Address</span><span class="result-value">${addr}</span></div>
+                <div class="result-row"><span class="result-label">Balance</span><span class="result-value" style="font-size:20px;font-weight:700;color:var(--accent);">${weiToEth(balance)} ETH</span></div>
+                <div class="result-row"><span class="result-label">Transactions</span><span class="result-value">${parseInt(txCount, 16)}</span></div>
+            `;
+            card.classList.add('active');
+        }
+
+        // Enter key search
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') search();
+        });
+
+        // Initial load
+        loadStats();
+        loadBlocks();
+        loadTransactions();
+
+        // Auto-refresh every 10 seconds
+        setInterval(() => {
+            loadStats();
+            loadBlocks();
+            loadTransactions();
+        }, 10000);
+    </script>
+</body>
+</html>
