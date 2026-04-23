@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: anvil-render-q5wl
+    env: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    envVars:
+      - key: PORT
+        value: 8545
+      - key: EXPLORER_PORT
+        value: 3000
+      - key: JSONBIN_BIN_ID
+        sync: false
+      - key: JSONBIN_API_KEY
+        sync: false
+      - key: FORK_URL
+        sync: false
+      - key: CHAIN_ID
+        value: "1"
+      - key: PUBLIC_URL
+        value: https://anvil-render-q5wl.onrender.com
+    disk:
+      name: anvil-state
+      mountPath: /tmp
+      sizeGB: 10
