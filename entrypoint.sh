@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # -------------------------------------------------------------------
-# Anvil + JSONBin.io Persistence Entrypoint (INSTANT UPLOAD)
+# Anvil + JSONBin.io Persistence Entrypoint (INSTANT UPLOAD - FIXED)
 # Uploads state to JSONBin after EVERY transaction
 # -------------------------------------------------------------------
 
@@ -66,22 +66,6 @@ else
 fi
 
 # -------------------------------------------------------------------
-# Dump Anvil state to file using RPC
-# -------------------------------------------------------------------
-dump_state() {
-    RESULT=$(curl -s -X POST "http://localhost:${PORT}" \
-        -H "Content-Type: application/json" \
-        --data '{"jsonrpc":"2.0","method":"anvil_dumpState","params":["'${STATE_FILE}'"],"id":1}')
-    
-    if echo "$RESULT" | jq -e '.result == true' > /dev/null 2>&1; then
-        if [ -f "${STATE_FILE}" ] && validate_state "${STATE_FILE}"; then
-            return 0
-        fi
-    fi
-    return 1
-}
-
-# -------------------------------------------------------------------
 # Upload to JSONBin
 # -------------------------------------------------------------------
 upload_state() {
@@ -91,6 +75,8 @@ upload_state() {
     fi
     
     STATE_CONTENT=$(cat "${STATE_FILE}")
+    SIZE=$(wc -c < "${STATE_FILE}")
+    ACCOUNTS=$(jq '.accounts | keys | length' "${STATE_FILE}" 2>/dev/null || echo "0")
     
     RESPONSE=$(curl -s --max-time 30 -X PUT \
         "https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}" \
@@ -99,8 +85,7 @@ upload_state() {
         -d "{\"record\": ${STATE_CONTENT}}")
     
     if echo "$RESPONSE" | jq -e '.record' > /dev/null 2>&1; then
-        local accounts=$(jq '.accounts | keys | length' "${STATE_FILE}" 2>/dev/null || echo "0")
-        log "✅ State uploaded to JSONBin (${accounts} wallets)"
+        log "✅ Uploaded (${SIZE} bytes, ${ACCOUNTS} wallets)"
         return 0
     else
         log "❌ Upload failed"
@@ -109,52 +94,40 @@ upload_state() {
 }
 
 # -------------------------------------------------------------------
-# Save state: dump + upload
-# -------------------------------------------------------------------
-save_state() {
-    if dump_state; then
-        upload_state
-    else
-        log "⚠️ State dump failed, skipping upload"
-    fi
-}
-
-# -------------------------------------------------------------------
-# Monitor transactions and save after each one
+# Monitor transactions and upload after each one
 # -------------------------------------------------------------------
 monitor_and_save() {
-    log "👁️  Starting transaction monitor..."
-    log "   State will be saved after EVERY transaction"
+    log "👁️  Monitoring transactions (checks every 2s)..."
     
     LAST_BLOCK="0x0"
     
     while true; do
-        # Get current block
+        # Get current block from Anvil
         CURRENT_BLOCK=$(curl -s -X POST "http://localhost:${PORT}" \
             -H "Content-Type: application/json" \
             --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
             | jq -r '.result // "0x0"')
         
-        # Check if block changed
+        # If block changed, upload the state
         if [ "$CURRENT_BLOCK" != "$LAST_BLOCK" ] && [ "$CURRENT_BLOCK" != "0x0" ]; then
-            log "🔔 New block detected: ${CURRENT_BLOCK} (was ${LAST_BLOCK})"
-            log "💾 Saving state to JSONBin..."
-            save_state
+            log "🔔 New block: ${LAST_BLOCK} → ${CURRENT_BLOCK}"
+            log "💾 Uploading state..."
+            upload_state
             LAST_BLOCK="$CURRENT_BLOCK"
         fi
         
-        sleep 2  # Check every 2 seconds
+        sleep 2
     done
 }
 
 # -------------------------------------------------------------------
-# Also save on shutdown
+# Shutdown handler
 # -------------------------------------------------------------------
 graceful_shutdown() {
-    log "⚠️ Shutdown signal received..."
-    log "💾 Performing final state save..."
-    save_state
-    log "👋 Shutdown complete"
+    log "⚠️ Shutdown..."
+    log "💾 Final upload..."
+    upload_state
+    log "👋 Done"
     exit 0
 }
 
@@ -165,23 +138,30 @@ log "========================================="
 log "🚀 LAUNCHING ANVIL"
 log "========================================="
 
-CMD="anvil --fork-url ${FORK_URL} --chain-id ${CHAIN_ID} --host 0.0.0.0 --port ${PORT}"
+# Build command with --state and --state-interval for frequent saves
+CMD="anvil"
+CMD="${CMD} --fork-url ${FORK_URL}"
+CMD="${CMD} --chain-id ${CHAIN_ID}"
+CMD="${CMD} --host 0.0.0.0"
+CMD="${CMD} --port ${PORT}"
+CMD="${CMD} --state ${STATE_FILE}"
+CMD="${CMD} --state-interval 1"  # Write state to disk every 1 second!
 
-if [ "${STATE_LOADED}" = "yes" ] && [ -f "${STATE_FILE}" ]; then
-    CMD="${CMD} --state ${STATE_FILE}"
-    log "📂 Using persisted state"
+if [ "${STATE_LOADED}" = "yes" ]; then
+    log "📂 Launching with persisted state"
 else
-    log "🆕 Fresh start"
+    log "🆕 Launching fresh"
 fi
 
+log "🔧 ${CMD}"
 $CMD &
 ANVIL_PID=$!
 log "✅ Anvil PID: ${ANVIL_PID}"
 
 # -------------------------------------------------------------------
-# PHASE 3: WAIT FOR ANVIL
+# PHASE 3: WAIT & START MONITORING
 # -------------------------------------------------------------------
-log "⏳ Waiting for Anvil to be ready..."
+log "⏳ Waiting for Anvil..."
 sleep 3
 
 for i in $(seq 1 20); do
@@ -189,26 +169,27 @@ for i in $(seq 1 20); do
         -H "Content-Type: application/json" \
         --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
         | jq -e '.result' > /dev/null 2>&1; then
-        log "✅ Anvil is ready"
+        log "✅ Anvil ready"
         break
     fi
     sleep 2
 done
 
 # -------------------------------------------------------------------
-# PHASE 4: START MONITORING & TRAP
+# PHASE 4: START SERVICES
 # -------------------------------------------------------------------
 log "========================================="
-log "🟢 STARTING TRANSACTION MONITOR"
+log "🟢 STARTING MONITOR"
 log "========================================="
 
 trap graceful_shutdown SIGTERM SIGINT
 
-# Initial save
-log "💾 Performing initial state save..."
-save_state
+# Initial upload
+log "💾 Initial state upload..."
+sleep 2  # Let Anvil write first state
+upload_state
 
-# Start monitoring for new transactions
+# Start monitoring
 monitor_and_save &
 MONITOR_PID=$!
 
@@ -217,7 +198,7 @@ log "🎯 SYSTEM READY"
 log "========================================="
 log "📡 RPC: https://anvil-render-q5wl.onrender.com"
 log "💾 State: Saved after every transaction"
-log "🔒 All wallet balances preserved"
+log "🔒 All balances preserved"
 log "========================================="
 
 wait $ANVIL_PID
