@@ -2,9 +2,11 @@
 set -e
 
 # -------------------------------------------------------------------
-# Anvil + JSONBin.io Persistence Entrypoint
+# Anvil + JSONBin.io Persistence Entrypoint (BALANCE-SAFE VERSION)
 # -------------------------------------------------------------------
-# Environment variables are hardcoded below - modify as needed
+# This version preserves ALL balances from the state file.
+# Only impersonation is restored (needed for signing transactions).
+# No balances are ever modified on restart.
 # -------------------------------------------------------------------
 
 # Hardcoded configuration
@@ -15,8 +17,12 @@ CHAIN_ID="1"
 PORT="8545"
 STATE_FILE="/tmp/state.json"
 
+# Wallets to impersonate (access only, no balance changes)
+MY_WALLET="0x4515C3834807993B080976da0F08790B70D5A247"
+USDT_WHALE="0x28C6c06298d514Db089934071355E5743bf21d60"
+
 # -------------------------------------------------------------------
-# Logging helper (writes to stdout and a log file)
+# Logging helper
 LOG_FILE="/tmp/anvil-jsonbin.log"
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
@@ -24,10 +30,11 @@ log() {
 
 log "========================================="
 log "🔷 ANVIL + JSONBIN PERSISTENCE STARTING"
+log "🔷 MODE: Preserve All Balances"
 log "========================================="
 
 # -------------------------------------------------------------------
-# Check that required commands exist
+# Check dependencies
 log "🔍 Checking required dependencies..."
 for cmd in curl jq; do
     if ! command -v $cmd >/dev/null 2>&1; then
@@ -38,7 +45,7 @@ done
 log "✅ All dependencies present (curl, jq)"
 
 # -------------------------------------------------------------------
-# Validate that a file is a proper Anvil state (has a "block" field)
+# Validate state file
 validate_state() {
     local file=$1
     if [ ! -f "$file" ]; then
@@ -51,7 +58,7 @@ validate_state() {
 }
 
 # -------------------------------------------------------------------
-# PHASE 1: DOWNLOAD STATE FROM JSONBIN BEFORE ANYTHING ELSE
+# PHASE 1: DOWNLOAD STATE FROM JSONBIN
 # -------------------------------------------------------------------
 log "========================================="
 log "🔵 PHASE 1: LOADING PERSISTED STATE FROM JSONBIN"
@@ -64,22 +71,20 @@ download_state() {
     log "📥 Attempting to download state from JSONBin.io..."
     
     if [ -z "${JSONBIN_BIN_ID}" ] || [ -z "${JSONBIN_API_KEY}" ]; then
-        log "⚠️ JSONBIN_BIN_ID or JSONBIN_API_KEY not set. Starting fresh."
+        log "⚠️ Credentials not set. Starting fresh."
         rm -f "${STATE_FILE}"
         return 1
     fi
 
-    # Attempt download with timeout
     RESPONSE=$(curl -s --max-time 30 -X GET "https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest" \
         -H "X-Master-Key: ${JSONBIN_API_KEY}" 2>&1) || {
-        log "⚠️ curl download failed or timed out: ${RESPONSE}"
+        log "⚠️ curl download failed or timed out"
         rm -f "${STATE_FILE}"
         return 1
     }
 
-    # Check if response contains valid record
     if echo "$RESPONSE" | jq -e '.record' > /dev/null 2>&1; then
-        log "📦 Extracting state data from response..."
+        log "📦 Extracting state data..."
         echo "$RESPONSE" | jq -r '.record' > "${STATE_FILE}"
         
         if validate_state "${STATE_FILE}"; then
@@ -90,59 +95,37 @@ download_state() {
             log "   - Block number: ${block}"
             return 0
         else
-            log "⚠️ Downloaded state is invalid (missing 'block' field)"
+            log "⚠️ Downloaded state is invalid"
             rm -f "${STATE_FILE}"
             return 1
         fi
     else
-        log "⚠️ No valid state found in JSONBin response"
-        log "   Response: $(echo "$RESPONSE" | head -c 200)..."
+        log "⚠️ No valid state found in JSONBin"
         rm -f "${STATE_FILE}"
         return 1
     fi
 }
 
-# Execute download
 if download_state; then
     STATE_LOADED="yes"
-    log "🎯 State successfully loaded from JSONBin"
+    log "🎯 State successfully loaded - all balances preserved"
 else
     STATE_LOADED="no"
-    log "🆕 No existing state found - will start with fresh chain"
+    log "🆕 Starting fresh (no previous state)"
 fi
 
 # -------------------------------------------------------------------
-# PHASE 2: REGISTER CONTAINER IMAGE
-# -------------------------------------------------------------------
-log "========================================="
-log "🟢 PHASE 2: REGISTERING CONTAINER IMAGE"
-log "========================================="
-log "📦 Image Configuration:"
-log "   - Chain ID: ${CHAIN_ID}"
-log "   - Port: ${PORT}"
-log "   - Fork URL: ${FORK_URL:0:50}..."
-log "   - State file: ${STATE_FILE}"
-log "   - State loaded: ${STATE_LOADED}"
-log "   - Periodic sync: Every 60 seconds"
-log "✅ Container image registered with persistence enabled"
-
-# -------------------------------------------------------------------
-# Upload local state to JSONBin.io
+# Upload state to JSONBin
 upload_state() {
     log "📤 Uploading state to JSONBin.io..."
     
     if [ -z "${JSONBIN_BIN_ID}" ] || [ -z "${JSONBIN_API_KEY}" ]; then
-        log "⚠️ JSONBIN_BIN_ID or JSONBIN_API_KEY not set. Skipping upload."
+        log "⚠️ Credentials not set. Skipping upload."
         return 1
     fi
 
-    if [ ! -f "${STATE_FILE}" ]; then
-        log "⚠️ No state file exists at ${STATE_FILE}"
-        return 1
-    fi
-
-    if ! validate_state "${STATE_FILE}"; then
-        log "⚠️ State file is invalid or corrupted"
+    if [ ! -f "${STATE_FILE}" ] || ! validate_state "${STATE_FILE}"; then
+        log "⚠️ No valid state file to upload"
         return 1
     fi
 
@@ -150,32 +133,29 @@ upload_state() {
     local block=$(jq -r '.block' "${STATE_FILE}" 2>/dev/null || echo "unknown")
     local size=$(wc -c < "${STATE_FILE}")
     
-    log "📦 Uploading state (block: ${block}, size: ${size} bytes)..."
-    
     RESPONSE=$(curl -s --max-time 30 -X PUT "https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}" \
         -H "Content-Type: application/json" \
         -H "X-Master-Key: ${JSONBIN_API_KEY}" \
         -d "{\"record\": ${STATE_CONTENT}}" 2>&1) || {
-        log "⚠️ curl upload failed or timed out: ${RESPONSE}"
+        log "⚠️ curl upload failed"
         return 1
     }
 
     if echo "$RESPONSE" | jq -e '.record' > /dev/null 2>&1; then
-        log "✅ State uploaded successfully to JSONBin!"
+        log "✅ State uploaded successfully!"
         return 0
     else
-        local error_msg=$(echo "$RESPONSE" | jq -r '.message // "Unknown error"' 2>/dev/null)
-        log "❌ Upload failed: ${error_msg}"
+        log "❌ Upload failed"
         return 1
     fi
 }
 
 # -------------------------------------------------------------------
-# Periodic upload (runs in background)
+# Periodic upload
 periodic_upload() {
     local count=0
     while true; do
-        sleep 60   # upload every 60 seconds
+        sleep 60
         count=$((count + 1))
         log "⏰ Periodic upload #${count} triggered..."
         upload_state
@@ -183,48 +163,114 @@ periodic_upload() {
 }
 
 # -------------------------------------------------------------------
-# PHASE 3: START BACKGROUND SYNC SERVICE
+# PHASE 2: REGISTER CONTAINER
 # -------------------------------------------------------------------
 log "========================================="
-log "🟡 PHASE 3: STARTING BACKGROUND SERVICES"
+log "🟢 PHASE 2: REGISTERING CONTAINER IMAGE"
 log "========================================="
-
-# Trap signals to upload state on exit
-trap 'log "⚠️ Container stopping, uploading final state..."; upload_state; log "👋 Shutdown complete"; exit 0' SIGTERM SIGINT
-
-periodic_upload &
-log "✅ State sync service started (uploads every 60 seconds)"
+log "📦 Configuration:"
+log "   - Chain ID: ${CHAIN_ID}"
+log "   - Port: ${PORT}"
+log "   - State loaded: ${STATE_LOADED}"
+log "   - Mode: PRESERVE ALL BALANCES"
+log "✅ Container registered"
 
 # -------------------------------------------------------------------
-# PHASE 4: LAUNCH ANVIL
+# PHASE 3: LAUNCH ANVIL
 # -------------------------------------------------------------------
 log "========================================="
-log "🚀 PHASE 4: LAUNCHING ANVIL NODE"
+log "🚀 PHASE 3: LAUNCHING ANVIL NODE"
 log "========================================="
 
-# Build Anvil command
 CMD="anvil --fork-url ${FORK_URL} --chain-id ${CHAIN_ID} --host 0.0.0.0 --port ${PORT}"
 
-# Only add state flag if state was successfully loaded
 if [ "${STATE_LOADED}" = "yes" ] && [ -f "${STATE_FILE}" ]; then
     CMD="${CMD} --state ${STATE_FILE}"
-    log "📂 Launching with persisted state from block $(jq -r '.block' "${STATE_FILE}" 2>/dev/null || echo "unknown")"
+    log "📂 Launching with persisted state"
 else
     log "🆕 Launching with fresh state"
 fi
 
 log "🔧 Command: ${CMD}"
-log "📡 RPC endpoint: http://0.0.0.0:${PORT}"
-log "🌐 Public endpoint: https://anvil-render-q5wl.onrender.com"
-log "⏳ Node is starting..."
-log "========================================="
-
-# Start Anvil and wait for it to finish
 $CMD &
 ANVIL_PID=$!
+log "✅ Anvil started (PID: ${ANVIL_PID})"
 
-log "✅ Anvil process started (PID: ${ANVIL_PID})"
-log "📋 Logs will appear below:"
+# -------------------------------------------------------------------
+# PHASE 4: RESTORE IMPERSONATION ONLY (NO BALANCE CHANGES!)
+# -------------------------------------------------------------------
+log "========================================="
+log "🟣 PHASE 4: RESTORING WALLET ACCESS ONLY"
+log "========================================="
+log "⏳ Waiting for Anvil to be ready..."
+log "⚠️  IMPORTANT: Only restoring impersonation, NOT changing balances!"
+
+sleep 5
+
+# Check if Anvil is ready
+RETRY=0
+MAX_RETRIES=12
+while [ $RETRY -lt $MAX_RETRIES ]; do
+    if curl -s -X POST "http://localhost:${PORT}" \
+        -H "Content-Type: application/json" \
+        --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
+        | jq -e '.result' > /dev/null 2>&1; then
+        log "✅ Anvil RPC is ready"
+        break
+    fi
+    RETRY=$((RETRY + 1))
+    log "⏳ Waiting... (${RETRY}/${MAX_RETRIES})"
+    sleep 5
+done
+
+if [ $RETRY -ge $MAX_RETRIES ]; then
+    log "❌ Anvil failed to start properly"
+    exit 1
+fi
+
+# RPC helper
+rpc_call() {
+    local method=$1
+    local params=$2
+    curl -s -X POST "http://localhost:${PORT}" \
+        -H "Content-Type: application/json" \
+        --data "{\"jsonrpc\":\"2.0\",\"method\":\"${method}\",\"params\":${params},\"id\":1}"
+}
+
+# Restore impersonation ONLY
+log "👤 Restoring wallet impersonation..."
+rpc_call "anvil_impersonateAccount" "[\"${MY_WALLET}\"]" > /dev/null 2>&1 && \
+    log "✅ Wallet access restored: ${MY_WALLET}" || \
+    log "⚠️ Failed to impersonate wallet"
+
+log "🐋 Restoring whale impersonation..."
+rpc_call "anvil_impersonateAccount" "[\"${USDT_WHALE}\"]" > /dev/null 2>&1 && \
+    log "✅ Whale access restored: ${USDT_WHALE}" || \
+    log "⚠️ Failed to impersonate whale"
+
+log "🔒 NO BALANCES WERE MODIFIED - All state preserved exactly as saved"
+
+# -------------------------------------------------------------------
+# PHASE 5: START SYNC SERVICE
+# -------------------------------------------------------------------
+log "========================================="
+log "🟡 PHASE 5: STARTING BACKGROUND SYNC"
+log "========================================="
+
+trap 'log "⚠️ Container stopping, uploading final state..."; upload_state; log "👋 Shutdown complete"; exit 0' SIGTERM SIGINT
+
+periodic_upload &
+log "✅ State sync active (every 60s)"
+
+# -------------------------------------------------------------------
+# DONE
+# -------------------------------------------------------------------
+log "========================================="
+log "🎯 SETUP COMPLETE"
+log "========================================="
+log "📡 RPC: https://anvil-render-q5wl.onrender.com"
+log "👛 Wallet: ${MY_WALLET}"
+log "🔒 All balances preserved from state"
 log "========================================="
 
 wait $ANVIL_PID
