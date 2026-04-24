@@ -3,134 +3,174 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EtherScan - Block Explorer</title>
+    <title>AnvilScan Pro - Real Blockchain Explorer</title>
     <style>
         :root {
-            --bg: #0a0e17;
-            --card: #111827;
-            --border: #1e293b;
-            --text: #e2e8f0;
-            --text-secondary: #94a3b8;
-            --accent: #3b82f6;
-            --accent-hover: #2563eb;
-            --green: #10b981;
-            --red: #ef4444;
-            --orange: #f59e0b;
+            --bg: #060a13;
+            --card: #0d1117;
+            --card-hover: #161b22;
+            --border: #21262d;
+            --text: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent: #58a6ff;
+            --accent-hover: #79c0ff;
+            --green: #3fb950;
+            --green-bg: #04260f;
+            --red: #f85149;
+            --red-bg: #490202;
+            --orange: #d2991d;
+            --orange-bg: #341a00;
+            --purple: #a371f7;
+            --pink: #db61a2;
         }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
             background: var(--bg);
             color: var(--text);
             min-height: 100vh;
+            line-height: 1.6;
         }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #30363d; }
 
         /* Header */
         .header {
             background: var(--card);
             border-bottom: 1px solid var(--border);
             padding: 0 24px;
-            height: 64px;
+            height: 56px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             position: sticky;
             top: 0;
-            z-index: 100;
+            z-index: 1000;
+            backdrop-filter: blur(12px);
         }
 
         .logo {
-            font-size: 24px;
-            font-weight: 700;
-            color: var(--text);
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
         }
+        .logo-gradient { background: linear-gradient(135deg, #58a6ff, #a371f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
-        .logo span {
-            color: var(--accent);
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
 
         .network-badge {
-            background: var(--accent);
-            color: white;
-            padding: 4px 12px;
+            background: #1a7f37;
+            color: #7ee787;
+            padding: 5px 14px;
             border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            border: 1px solid #238636;
         }
 
-        /* Search */
-        .search-container {
-            background: var(--card);
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* Hero Search */
+        .hero {
+            background: linear-gradient(180deg, #0d1117 0%, #060a13 100%);
             border-bottom: 1px solid var(--border);
-            padding: 32px 24px;
+            padding: 48px 24px 40px;
             text-align: center;
         }
 
-        .search-container h1 {
-            font-size: 28px;
+        .hero h1 {
+            font-size: 32px;
+            font-weight: 800;
             margin-bottom: 8px;
+            letter-spacing: -1px;
         }
-
-        .search-container p {
-            color: var(--text-secondary);
-            margin-bottom: 24px;
-        }
+        .hero h1 span { background: linear-gradient(135deg, #58a6ff, #a371f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .hero p { color: var(--text-secondary); font-size: 14px; margin-bottom: 28px; }
 
         .search-box {
             display: flex;
-            max-width: 700px;
+            max-width: 680px;
             margin: 0 auto;
-            gap: 8px;
+            gap: 0;
+            border: 2px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            transition: border-color 0.3s;
+            background: var(--card);
         }
-
+        .search-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(88,166,255,0.1); }
         .search-box input {
             flex: 1;
-            padding: 14px 20px;
-            background: var(--bg);
-            border: 2px solid var(--border);
-            border-radius: 12px;
-            color: var(--text);
-            font-size: 16px;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-
-        .search-box input:focus {
-            border-color: var(--accent);
-        }
-
-        .search-box input::placeholder {
-            color: #475569;
-        }
-
-        .search-box button {
-            padding: 14px 28px;
-            background: var(--accent);
-            color: white;
+            padding: 16px 20px;
+            background: transparent;
             border: none;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
+            color: var(--text);
+            font-size: 15px;
+            outline: none;
+            font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+        }
+        .search-box input::placeholder { color: #484f58; }
+        .search-box button {
+            padding: 16px 28px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            font-size: 15px;
+            font-weight: 700;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: all 0.2s;
+            letter-spacing: 0.3px;
         }
+        .search-box button:hover { background: var(--accent-hover); }
 
-        .search-box button:hover {
-            background: var(--accent-hover);
+        .search-shortcuts {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 16px;
+            flex-wrap: wrap;
         }
+        .shortcut-chip {
+            background: var(--card);
+            border: 1px solid var(--border);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .shortcut-chip:hover { background: var(--card-hover); border-color: var(--accent); color: var(--accent); }
 
-        /* Stats */
-        .stats {
+        /* Stats Bar */
+        .stats-bar {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            padding: 24px;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            padding: 20px 24px;
             max-width: 1200px;
             margin: 0 auto;
         }
@@ -139,26 +179,26 @@
             background: var(--card);
             border: 1px solid var(--border);
             border-radius: 12px;
-            padding: 20px;
+            padding: 16px 20px;
+            transition: all 0.2s;
         }
-
-        .stat-card .label {
+        .stat-card:hover { border-color: var(--accent); }
+        .stat-card .stat-label {
             color: var(--text-secondary);
-            font-size: 12px;
+            font-size: 10px;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 8px;
+            letter-spacing: 1.5px;
+            font-weight: 600;
+            margin-bottom: 6px;
         }
-
-        .stat-card .value {
-            font-size: 24px;
-            font-weight: 700;
+        .stat-card .stat-value {
+            font-size: 22px;
+            font-weight: 800;
             color: var(--accent);
+            font-family: 'SF Mono', 'Fira Code', monospace;
         }
-
-        .stat-card .value.small {
-            font-size: 16px;
-        }
+        .stat-card .stat-value.green { color: var(--green); }
+        .stat-card .stat-value.purple { color: var(--purple); }
 
         /* Content */
         .content {
@@ -167,19 +207,36 @@
             padding: 0 24px 40px;
         }
 
-        .section-title {
-            font-size: 18px;
-            font-weight: 600;
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 16px;
             padding-bottom: 12px;
-            border-bottom: 2px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .section-title .icon { font-size: 18px; }
+        .section-badge {
+            background: var(--card);
+            border: 1px solid var(--border);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            color: var(--text-secondary);
         }
 
         /* Table */
-        .table-container {
+        .table-wrapper {
             background: var(--card);
             border: 1px solid var(--border);
-            border-radius: 12px;
+            border-radius: 16px;
             overflow: hidden;
             margin-bottom: 24px;
         }
@@ -188,504 +245,820 @@
             width: 100%;
             border-collapse: collapse;
         }
-
         th {
-            background: #1a2236;
-            padding: 14px 16px;
+            background: #0d1117;
+            padding: 12px 16px;
             text-align: left;
-            font-size: 12px;
+            font-size: 10px;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 1.5px;
             color: var(--text-secondary);
-            font-weight: 600;
+            font-weight: 700;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
         }
-
         td {
             padding: 14px 16px;
             border-top: 1px solid var(--border);
-            font-size: 14px;
-        }
-
-        .address {
-            color: var(--accent);
-            font-family: 'Courier New', monospace;
             font-size: 13px;
+            vertical-align: middle;
         }
+        tr:hover td { background: var(--card-hover); }
 
-        .hash {
+        .mono {
+            font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+            font-size: 12px;
             color: var(--accent);
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
             cursor: pointer;
+            transition: color 0.2s;
         }
-
-        .hash:hover {
-            text-decoration: underline;
-        }
+        .mono:hover { color: var(--accent-hover); text-decoration: underline; }
+        .mono-secondary { font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace; font-size: 11px; color: var(--text-secondary); }
+        .mono-white { font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace; font-size: 12px; color: var(--text); }
 
         .badge {
-            display: inline-block;
-            padding: 3px 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
             border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
         }
+        .badge-success { background: var(--green-bg); color: var(--green); border: 1px solid #23863640; }
+        .badge-pending { background: var(--orange-bg); color: var(--orange); border: 1px solid #9e6a0340; }
+        .badge-contract { background: #1b1b3a; color: var(--purple); border: 1px solid #6e40c940; }
+        .badge-token { background: #1b1b3a; color: var(--pink); border: 1px solid #bf4b8a40; }
+        .badge-in { background: var(--green-bg); color: var(--green); }
+        .badge-out { background: var(--red-bg); color: var(--red); }
 
-        .badge-success {
-            background: #065f46;
-            color: #6ee7b7;
-        }
-
-        .badge-pending {
-            background: #78350f;
-            color: #fbbf24;
-        }
+        .amount-in { color: var(--green); font-weight: 600; }
+        .amount-out { color: var(--red); font-weight: 600; }
+        .amount-neutral { color: var(--text); font-weight: 600; }
 
         /* Result Card */
         .result-card {
             background: var(--card);
             border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 24px;
+            border-radius: 16px;
+            padding: 28px;
             margin-bottom: 24px;
             display: none;
+            animation: fadeIn 0.3s ease;
         }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+        .result-card.active { display: block; }
 
-        .result-card.active {
-            display: block;
+        .result-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
         }
+        @media (max-width: 768px) { .result-grid { grid-template-columns: 1fr; } }
 
-        .result-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 12px 0;
-            border-bottom: 1px solid var(--border);
+        .result-item {
+            background: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px 16px;
         }
-
-        .result-row:last-child {
-            border-bottom: none;
-        }
-
-        .result-label {
+        .result-item.full { grid-column: 1 / -1; }
+        .result-item .item-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
             color: var(--text-secondary);
-            font-size: 13px;
+            margin-bottom: 6px;
+            font-weight: 600;
         }
-
-        .result-value {
-            font-family: 'Courier New', monospace;
+        .result-item .item-value {
+            font-family: 'SF Mono', 'Fira Code', monospace;
             font-size: 13px;
             word-break: break-all;
-            text-align: right;
-            max-width: 60%;
+            color: var(--text);
         }
-
-        .result-value a {
+        .result-item .item-value.big {
+            font-size: 24px;
+            font-weight: 800;
             color: var(--accent);
         }
+        .result-item .item-value.green-text { color: var(--green); }
+        .result-item .item-value.red-text { color: var(--red); }
+
+        /* Token Balances */
+        .token-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 12px;
+        }
+        .token-card {
+            background: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            transition: all 0.2s;
+        }
+        .token-card:hover { border-color: var(--accent); }
+        .token-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 800;
+            flex-shrink: 0;
+        }
+        .token-icon.usdt { background: #26a17b20; color: #26a17b; }
+        .token-icon.usdc { background: #2775ca20; color: #2775ca; }
+        .token-icon.dai { background: #f5ac3720; color: #f5ac37; }
+        .token-icon.wbtc { background: #f7931a20; color: #f7931a; }
+        .token-icon.weth { background: #627eea20; color: #627eea; }
+        .token-icon.eth { background: #627eea20; color: #627eea; }
+        .token-info { flex: 1; min-width: 0; }
+        .token-symbol { font-weight: 700; font-size: 14px; }
+        .token-name { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .token-balance { font-weight: 700; font-size: 16px; text-align: right; }
 
         /* Loading */
-        .loading {
+        .loading-container {
             text-align: center;
-            padding: 40px;
+            padding: 48px;
             color: var(--text-secondary);
         }
-
         .spinner {
+            width: 36px;
+            height: 36px;
             border: 3px solid var(--border);
-            border-top: 3px solid var(--accent);
+            border-top-color: var(--accent);
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 16px;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 14px;
         }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Error */
-        .error {
-            background: #450a0a;
-            color: #fca5a5;
-            padding: 16px;
-            border-radius: 8px;
+        /* Error & Empty */
+        .error-box {
+            background: var(--red-bg);
+            border: 1px solid #f8514940;
+            color: var(--red);
+            padding: 14px 18px;
+            border-radius: 10px;
             margin-bottom: 16px;
             display: none;
+            font-size: 13px;
         }
+        .error-box.active { display: block; }
+        .empty-state { text-align: center; padding: 32px; color: var(--text-secondary); font-size: 13px; }
 
-        .error.active {
-            display: block;
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+            background: none;
+            border-top: none;
+            border-left: none;
+            border-right: none;
+        }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Method Badge */
+        .method-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 700;
+            background: #1b1b3a;
+            color: var(--purple);
+            font-family: 'SF Mono', 'Fira Code', monospace;
         }
 
         /* Footer */
         .footer {
             text-align: center;
-            padding: 24px;
+            padding: 20px;
             color: var(--text-secondary);
-            font-size: 12px;
+            font-size: 11px;
             border-top: 1px solid var(--border);
         }
+        .footer a { color: var(--accent); text-decoration: none; }
 
-        /* Mobile */
-        @media (max-width: 768px) {
-            .search-box {
-                flex-direction: column;
-            }
-            .stats {
-                grid-template-columns: 1fr 1fr;
-            }
-            .address, .hash {
-                font-size: 11px;
-            }
+        /* Tooltip */
+        [data-tooltip] { position: relative; cursor: help; }
+        [data-tooltip]:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 120%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1c2128;
+            color: var(--text);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            white-space: nowrap;
+            z-index: 100;
+            border: 1px solid var(--border);
         }
+
+        /* Copy */
+        .copy-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .copy-btn:hover { color: var(--accent); background: var(--border); }
+        .copied { color: var(--green) !important; }
     </style>
 </head>
 <body>
 
     <!-- Header -->
     <div class="header">
-        <div class="logo">🔍 Ether<span>Scan</span></div>
-        <div>
-            <span class="network-badge" id="networkBadge">⛓️ Chain ID: 1</span>
+        <div class="logo"><span class="logo-gradient">⬨ AnvilScan</span> <span style="font-weight:400;font-size:13px;color:var(--text-secondary)">Pro</span></div>
+        <div class="header-right">
+            <span style="font-size:11px;color:var(--text-secondary)"><span class="status-dot"></span> Live</span>
+            <span class="network-badge">⛓ Chain ID: 1</span>
         </div>
     </div>
 
-    <!-- Search -->
-    <div class="search-container">
-        <h1>The Etherscan Blockchain Explorer ERC20 Network</h1>
-        <p>Search by Address, Transaction Hash, or Block Number</p>
+    <!-- Hero Search -->
+    <div class="hero">
+        <h1>Explore the <span>Anvil</span> Blockchain</h1>
+        <p>Real-time block explorer — Search addresses, transactions, blocks, and tokens</p>
         <div class="search-box">
-            <input type="text" id="searchInput" placeholder="Enter Address / Tx Hash / Block Number...">
-            <button onclick="search()">🔍 Search</button>
+            <input type="text" id="searchInput" placeholder="Search by Address / Tx Hash / Block / ENS..." autofocus>
+            <button onclick="doSearch()">🔍 Search</button>
+        </div>
+        <div class="search-shortcuts">
+            <span class="shortcut-chip" onclick="quickSearch('latest')">📦 Latest Block</span>
+            <span class="shortcut-chip" onclick="quickSearch('0x4515C3834807993B080976da0F08790B70D5A247')">👛 Wallet 1</span>
+            <span class="shortcut-chip" onclick="quickSearch('0x3bdc28c177193c26194e9c6f1c5049b667cff92d')">👛 Wallet 2</span>
+            <span class="shortcut-chip" onclick="quickSearch('0xdAC17F958D2ee523a2206206994597C13D831ec7')">💵 USDT Contract</span>
+            <span class="shortcut-chip" onclick="quickSearch('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')">💲 USDC Contract</span>
         </div>
     </div>
 
-    <!-- Stats -->
-    <div class="stats">
-        <div class="stat-card">
-            <div class="label">Latest Block</div>
-            <div class="value" id="latestBlock">Loading...</div>
-        </div>
-        <div class="stat-card">
-            <div class="label">Chain ID</div>
-            <div class="value">1</div>
-        </div>
-        <div class="stat-card">
-            <div class="label">RPC Endpoint</div>
-            <div class="value small" style="word-break: break-all;">anvil-render-q5wl.onrender.com</div>
-        </div>
-        <div class="stat-card">
-            <div class="label">Status</div>
-            <div class="value" style="color: var(--green);" id="statusIndicator">● Online</div>
-        </div>
+    <!-- Stats Bar -->
+    <div class="stats-bar" id="statsBar">
+        <div class="stat-card"><div class="stat-label">📦 Latest Block</div><div class="stat-value" id="statBlock">—</div></div>
+        <div class="stat-card"><div class="stat-label">⛽ Gas Price</div><div class="stat-value green" id="statGas">—</div></div>
+        <div class="stat-card"><div class="stat-label">📝 Total TXs</div><div class="stat-value purple" id="statTxs">—</div></div>
+        <div class="stat-card"><div class="stat-label">👛 Accounts</div><div class="stat-value" id="statAccounts">—</div></div>
     </div>
 
     <!-- Error -->
-    <div class="content">
-        <div class="error" id="errorBox"></div>
-    </div>
+    <div class="content"><div class="error-box" id="errorBox"></div></div>
 
     <!-- Search Result -->
-    <div class="content">
-        <div class="result-card" id="resultCard"></div>
+    <div class="content"><div class="result-card" id="resultCard"></div></div>
+
+    <!-- Tabs for Address View -->
+    <div class="content" id="addressTabs" style="display:none;">
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('transactions')">💸 Transactions</button>
+            <button class="tab" onclick="switchTab('tokens')">🪙 Token Holdings</button>
+            <button class="tab" onclick="switchTab('internal')">⚡ Internal TXs</button>
+            <button class="tab" onclick="switchTab('logs')">📋 Event Logs</button>
+        </div>
+        <div class="tab-content active" id="tab-transactions"></div>
+        <div class="tab-content" id="tab-tokens"></div>
+        <div class="tab-content" id="tab-internal"></div>
+        <div class="tab-content" id="tab-logs"></div>
     </div>
 
     <!-- Latest Blocks -->
     <div class="content">
-        <div class="section-title">📦 Latest Blocks</div>
-        <div class="table-container">
+        <div class="section-header">
+            <div class="section-title"><span class="icon">📦</span> Latest Blocks</div>
+            <span class="section-badge" id="blockCount">Auto-refresh 10s</span>
+        </div>
+        <div class="table-wrapper">
             <table>
-                <thead>
-                    <tr>
-                        <th>Block</th>
-                        <th>Age</th>
-                        <th>Tx Count</th>
-                        <th>Gas Used</th>
-                        <th>Gas Limit</th>
-                    </tr>
-                </thead>
-                <tbody id="blocksTable">
-                    <tr><td colspan="5" class="loading"><div class="spinner"></div>Loading blocks...</td></tr>
-                </tbody>
+                <thead><tr><th>Block</th><th>Age</th><th>Validator</th><th>TXs</th><th>Gas Used</th><th>Gas Limit</th><th>Base Fee</th></tr></thead>
+                <tbody id="blocksTable"><tr><td colspan="7"><div class="loading-container"><div class="spinner"></div>Loading blocks from RPC...</div></td></tr></tbody>
             </table>
         </div>
     </div>
 
     <!-- Latest Transactions -->
     <div class="content">
-        <div class="section-title">💸 Latest Transactions</div>
-        <div class="table-container">
+        <div class="section-header">
+            <div class="section-title"><span class="icon">💸</span> Latest Transactions</div>
+            <span class="section-badge">Live</span>
+        </div>
+        <div class="table-wrapper">
             <table>
-                <thead>
-                    <tr>
-                        <th>Tx Hash</th>
-                        <th>Block</th>
-                        <th>From</th>
-                        <th>To</th>
-                        <th>Value (ETH)</th>
-                    </tr>
-                </thead>
-                <tbody id="txTable">
-                    <tr><td colspan="5" class="loading"><div class="spinner"></div>Loading transactions...</td></tr>
-                </tbody>
+                <thead><tr><th>Tx Hash</th><th>Method</th><th>Block</th><th>Age</th><th>From</th><th style="text-align:center">→</th><th>To</th><th>Value</th><th>Txn Fee</th></tr></thead>
+                <tbody id="txTable"><tr><td colspan="9"><div class="loading-container"><div class="spinner"></div>Loading transactions from RPC...</div></td></tr></tbody>
             </table>
         </div>
     </div>
 
     <!-- Footer -->
     <div class="footer">
-        Etherscan - Powered by Ethereum JSON-RPC | RPC: https://anvil-render-q5wl.onrender.com
+        AnvilScan Pro — Real Blockchain Explorer powered by <a href="https://anvil-render-q5wl.onrender.com" target="_blank">Anvil JSON-RPC</a> | Chain ID: 1 | No mock data • All real-time
     </div>
 
     <script>
-        const RPC_URL = 'https://anvil-render-q5wl.onrender.com';
+        const RPC = 'https://anvil-render-q5wl.onrender.com';
+        let currentAddressData = null;
 
-        async function rpcCall(method, params = []) {
-            const response = await fetch(RPC_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    jsonrpc: '2.0',
-                    method: method,
-                    params: params,
-                    id: 1
-                })
-            });
-            const data = await response.json();
-            if (data.error) throw new Error(data.error.message);
-            return data.result;
+        // Known ERC-20 tokens
+        const KNOWN_TOKENS = {
+            '0xdAC17F958D2ee523a2206206994597C13D831ec7': { symbol: 'USDT', name: 'Tether USD', decimals: 6, icon: 'usdt', color: '#26a17b' },
+            '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48': { symbol: 'USDC', name: 'USD Coin', decimals: 6, icon: 'usdc', color: '#2775ca' },
+            '0x6B175474E89094C44Da98b954EedeAC495271d0F': { symbol: 'DAI', name: 'Dai Stablecoin', decimals: 18, icon: 'dai', color: '#f5ac37' },
+            '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599': { symbol: 'WBTC', name: 'Wrapped Bitcoin', decimals: 8, icon: 'wbtc', color: '#f7931a' },
+            '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2': { symbol: 'WETH', name: 'Wrapped Ether', decimals: 18, icon: 'weth', color: '#627eea' },
+            '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984': { symbol: 'UNI', name: 'Uniswap', decimals: 18, icon: 'uni', color: '#ff007a' },
+            '0x514910771AF9Ca656af840dff83E8264EcF986CA': { symbol: 'LINK', name: 'Chainlink', decimals: 18, icon: 'link', color: '#2a5ada' },
+            '0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0': { symbol: 'MATIC', name: 'Polygon', decimals: 18, icon: 'matic', color: '#8247e5' },
+            '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE': { symbol: 'SHIB', name: 'Shiba Inu', decimals: 18, icon: 'shib', color: '#ffa409' },
+            '0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2': { symbol: 'MKR', name: 'Maker', decimals: 18, icon: 'mkr', color: '#1aab9b' },
+        };
+
+        // RPC Call
+        async function rpc(method, params = []) {
+            try {
+                const res = await fetch(RPC, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ jsonrpc: '2.0', method, params, id: 1 })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error.message);
+                return data.result;
+            } catch (e) {
+                showError(`RPC Error: ${e.message}`);
+                throw e;
+            }
         }
 
-        function shortenAddress(addr) {
-            if (!addr || addr === '0x0000000000000000000000000000000000000000') return 'Contract Creation';
-            return addr.slice(0, 6) + '...' + addr.slice(-4);
-        }
+        // Formatting
+        function short(a) { if (!a) return '—'; if (a === '0x0000000000000000000000000000000000000000') return 'GENESIS'; return a.slice(0,6)+'...'+a.slice(-4); }
+        function shortHash(h) { return h ? h.slice(0,8)+'...'+h.slice(-6) : '—'; }
+        function weiToEth(w) { const v = BigInt(w||'0x0'); return Number(v) / 1e18; }
+        function formatEth(w, decimals = 4) { return weiToEth(w).toFixed(decimals); }
+        function formatUSD(w, decimals = 2) { const v = BigInt(w||'0x0'); return (Number(v) / 1e6).toFixed(decimals); }
+        function timeAgo(ts) { const s = Math.floor(Date.now()/1000 - parseInt(ts,16)); if (s<5) return 'just now'; if (s<60) return s+'s ago'; if (s<3600) return Math.floor(s/60)+'m ago'; if (s<86400) return Math.floor(s/3600)+'h ago'; return Math.floor(s/86400)+'d ago'; }
+        function hexToNum(h) { return parseInt(h,16).toLocaleString(); }
 
-        function weiToEth(wei) {
-            return (parseInt(wei, 16) / 1e18).toFixed(4);
+        // Decode method from input data
+        function decodeMethod(data) {
+            if (!data || data === '0x') return { name: 'Transfer', type: 'transfer' };
+            const sig = data.slice(0,10);
+            const methods = {
+                '0xa9059cbb': 'Transfer',
+                '0x095ea7b3': 'Approve',
+                '0x23b872dd': 'TransferFrom',
+                '0x38ed1739': 'Swap',
+                '0x7ff36ab5': 'SwapETH',
+                '0x18cbafe5': 'SwapTokens',
+                '0xfb3bdb41': 'SwapETH',
+                '0x4a25d94a': 'Swap',
+                '0xf305d719': 'AddLiquidity',
+                '0xe8e33700': 'AddLiquidity',
+                '0x02751cec': 'RemoveLiquidity',
+                '0xbaa2abde': 'RemoveLiquidity',
+                '0x42842e0e': 'SafeTransfer',
+                '0xb88d4fde': 'SafeTransferFrom',
+                '0x70a08231': 'balanceOf',
+                '0x18160ddd': 'totalSupply',
+                '0x313ce567': 'decimals',
+            };
+            return { name: methods[sig] || sig, type: methods[sig] ? 'known' : 'unknown' };
         }
 
         function showError(msg) {
             const box = document.getElementById('errorBox');
-            box.textContent = msg;
+            box.textContent = '⚠ ' + msg;
             box.classList.add('active');
-            setTimeout(() => box.classList.remove('active'), 5000);
+            setTimeout(() => box.classList.remove('active'), 8000);
         }
 
-        // Load stats
-        async function loadStats() {
-            try {
-                const block = await rpcCall('eth_blockNumber');
-                document.getElementById('latestBlock').textContent = parseInt(block, 16).toLocaleString();
-                document.getElementById('statusIndicator').textContent = '● Online';
-                document.getElementById('statusIndicator').style.color = 'var(--green)';
-            } catch (e) {
-                document.getElementById('statusIndicator').textContent = '● Offline';
-                document.getElementById('statusIndicator').style.color = 'var(--red)';
-            }
+        function clearError() { document.getElementById('errorBox').classList.remove('active'); }
+
+        // Copy to clipboard
+        function copyText(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showError('Copied to clipboard!');
+            });
         }
 
-        // Load latest blocks
-        async function loadBlocks() {
-            try {
-                const latestBlockHex = await rpcCall('eth_blockNumber');
-                const latestBlock = parseInt(latestBlockHex, 16);
-                const tbody = document.getElementById('blocksTable');
-                tbody.innerHTML = '';
-
-                for (let i = 0; i < 8; i++) {
-                    const blockNum = latestBlock - i;
-                    if (blockNum < 0) break;
-                    
-                    const blockHex = '0x' + blockNum.toString(16);
-                    const block = await rpcCall('eth_getBlockByNumber', [blockHex, false]);
-                    
-                    const txCount = block.transactions.length;
-                    const gasUsed = parseInt(block.gasUsed, 16).toLocaleString();
-                    const gasLimit = parseInt(block.gasLimit, 16).toLocaleString();
-                    const age = i === 0 ? '<span class="badge badge-success">Latest</span>' : (i * 2) + 's ago';
-
-                    tbody.innerHTML += `
-                        <tr>
-                            <td><span class="hash" onclick="searchBlock(${blockNum})">#${blockNum.toLocaleString()}</span></td>
-                            <td>${age}</td>
-                            <td>${txCount}</td>
-                            <td>${gasUsed}</td>
-                            <td>${gasLimit}</td>
-                        </tr>
-                    `;
-                }
-            } catch (e) {
-                document.getElementById('blocksTable').innerHTML = 
-                    '<tr><td colspan="5" style="color: var(--red); text-align:center;">Failed to load blocks</td></tr>';
-            }
+        // Quick search
+        function quickSearch(val) {
+            document.getElementById('searchInput').value = val;
+            doSearch();
         }
 
-        // Load latest transactions
-        async function loadTransactions() {
-            try {
-                const latestBlockHex = await rpcCall('eth_blockNumber');
-                const latestBlock = parseInt(latestBlockHex, 16);
-                const tbody = document.getElementById('txTable');
-                tbody.innerHTML = '';
-
-                let txCount = 0;
-                for (let i = 0; i < 5 && txCount < 6; i++) {
-                    const blockNum = latestBlock - i;
-                    if (blockNum < 0) break;
-                    
-                    const blockHex = '0x' + blockNum.toString(16);
-                    const block = await rpcCall('eth_getBlockByNumber', [blockHex, true]);
-                    
-                    if (block && block.transactions) {
-                        for (const tx of block.transactions.slice(0, 2)) {
-                            if (txCount >= 6) break;
-                            
-                            const valueETH = weiToEth(tx.value || '0x0');
-                            
-                            tbody.innerHTML += `
-                                <tr>
-                                    <td><span class="hash" onclick="searchTx('${tx.hash}')">${shortenAddress(tx.hash)}</span></td>
-                                    <td><span class="hash" onclick="searchBlock(${blockNum})">#${blockNum.toLocaleString()}</span></td>
-                                    <td><span class="address">${shortenAddress(tx.from)}</span></td>
-                                    <td><span class="address">${shortenAddress(tx.to)}</span></td>
-                                    <td>${valueETH}</td>
-                                </tr>
-                            `;
-                            txCount++;
-                        }
-                    }
-                }
-                
-                if (txCount === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--text-secondary);">No transactions yet</td></tr>';
-                }
-            } catch (e) {
-                document.getElementById('txTable').innerHTML = 
-                    '<tr><td colspan="5" style="color: var(--red); text-align:center;">Failed to load transactions</td></tr>';
-            }
-        }
-
-        // Search
-        async function search() {
+        // Main Search
+        async function doSearch() {
             const input = document.getElementById('searchInput').value.trim();
             if (!input) return;
 
+            clearError();
             const card = document.getElementById('resultCard');
-            card.innerHTML = '<div class="loading"><div class="spinner"></div>Searching...</div>';
+            card.innerHTML = '<div class="loading-container"><div class="spinner"></div>Searching blockchain...</div>';
             card.classList.add('active');
+            document.getElementById('addressTabs').style.display = 'none';
 
             try {
-                // Try as block number
-                if (/^\d+$/.test(input)) {
-                    await searchBlock(parseInt(input));
+                if (input === 'latest') {
+                    const block = await rpc('eth_getBlockByNumber', ['latest', true]);
+                    displayBlock(block);
                     return;
                 }
-
-                // Try as transaction hash
+                if (/^\d+$/.test(input)) { await searchBlock(parseInt(input)); return; }
                 if (input.length === 66 && input.startsWith('0x')) {
-                    await searchTx(input);
-                    return;
+                    const tx = await rpc('eth_getTransactionByHash', [input]);
+                    if (tx) { displayTx(input, tx); return; }
+                    const block = await rpc('eth_getBlockByHash', [input, true]);
+                    if (block) { displayBlock(block); return; }
                 }
-
-                // Try as address
-                if (input.length === 42 && input.startsWith('0x')) {
-                    await searchAddress(input);
-                    return;
-                }
-
-                // Try as block hash
-                if (input.length === 66 && input.startsWith('0x')) {
-                    await searchBlockByHash(input);
-                    return;
-                }
-
-                showError('Invalid input. Enter an address, tx hash, or block number.');
+                if (input.length === 42 && input.startsWith('0x')) { await searchAddress(input); return; }
+                showError('Invalid format. Enter address (0x...), tx hash, or block number.');
                 card.classList.remove('active');
             } catch (e) {
-                card.innerHTML = `<div style="color: var(--red); text-align:center; padding:20px;">Not found: ${e.message}</div>`;
+                card.innerHTML = `<div class="error-box active">Not found: ${e.message}</div>`;
             }
         }
 
+        // Search Block
         async function searchBlock(num) {
-            const blockHex = '0x' + num.toString(16);
-            const block = await rpcCall('eth_getBlockByNumber', [blockHex, true]);
+            const block = await rpc('eth_getBlockByNumber', ['0x'+num.toString(16), true]);
             displayBlock(block);
         }
 
-        async function searchBlockByHash(hash) {
-            const block = await rpcCall('eth_getBlockByHash', [hash, true]);
-            displayBlock(block);
-        }
-
+        // Display Block
         function displayBlock(block) {
             if (!block) throw new Error('Block not found');
-            
+            document.getElementById('addressTabs').style.display = 'none';
             const card = document.getElementById('resultCard');
+            const num = hexToNum(block.number);
+            const txs = block.transactions;
+            const txCount = Array.isArray(txs) ? txs.length : (typeof txs === 'string' ? txs : 0);
+            const gasUsed = hexToNum(block.gasUsed);
+            const gasLimit = hexToNum(block.gasLimit);
+            const baseFee = block.baseFeePerGas ? formatEth(block.baseFeePerGas, 9) : 'N/A';
+
+            let txListHTML = '';
+            if (Array.isArray(txs) && txCount > 0) {
+                txListHTML = '<div style="margin-top:16px;"><h4 style="margin-bottom:12px;">📝 Transactions ('+txCount+')</h4>';
+                txs.slice(0, 20).forEach((tx, i) => {
+                    const txHash = typeof tx === 'string' ? tx : tx.hash;
+                    txListHTML += `<div style="font-family:monospace;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer;color:var(--accent)" onclick="document.getElementById('searchInput').value='${txHash}';doSearch();">${i+1}. ${shortHash(txHash)}</div>`;
+                });
+                if (txCount > 20) txListHTML += `<div style="color:var(--text-secondary);font-size:12px;padding:6px 0;">... and ${txCount-20} more</div>`;
+                txListHTML += '</div>';
+            }
+
             card.innerHTML = `
-                <h3 style="margin-bottom:20px;">📦 Block #${parseInt(block.number, 16).toLocaleString()}</h3>
-                <div class="result-row"><span class="result-label">Block Hash</span><span class="result-value">${block.hash}</span></div>
-                <div class="result-row"><span class="result-label">Timestamp</span><span class="result-value">${new Date(parseInt(block.timestamp, 16) * 1000).toLocaleString()}</span></div>
-                <div class="result-row"><span class="result-label">Transactions</span><span class="result-value">${block.transactions.length}</span></div>
-                <div class="result-row"><span class="result-label">Gas Used</span><span class="result-value">${parseInt(block.gasUsed, 16).toLocaleString()}</span></div>
-                <div class="result-row"><span class="result-label">Gas Limit</span><span class="result-value">${parseInt(block.gasLimit, 16).toLocaleString()}</span></div>
-                <div class="result-row"><span class="result-label">Miner</span><span class="result-value address">${block.miner}</span></div>
+                <h3 style="margin-bottom:20px;font-size:20px;">📦 Block <span style="color:var(--accent)">#${num}</span></h3>
+                <div class="result-grid">
+                    <div class="result-item full"><div class="item-label">Block Hash</div><div class="item-value">${block.hash} <button class="copy-btn" onclick="copyText('${block.hash}')">📋</button></div></div>
+                    <div class="result-item"><div class="item-label">Block Number</div><div class="item-value big">#${num}</div></div>
+                    <div class="result-item"><div class="item-label">Timestamp</div><div class="item-value">${new Date(parseInt(block.timestamp,16)*1000).toLocaleString()} (${timeAgo(block.timestamp)})</div></div>
+                    <div class="result-item"><div class="item-label">Transactions</div><div class="item-value big">${txCount}</div></div>
+                    <div class="result-item"><div class="item-label">Gas Used</div><div class="item-value">${gasUsed} (${((parseInt(block.gasUsed,16)/parseInt(block.gasLimit,16))*100).toFixed(1)}%)</div></div>
+                    <div class="result-item"><div class="item-label">Gas Limit</div><div class="item-value">${gasLimit}</div></div>
+                    <div class="result-item"><div class="item-label">Base Fee</div><div class="item-value">${baseFee} ETH</div></div>
+                    <div class="result-item"><div class="item-label">Validator / Miner</div><div class="item-value mono" onclick="quickSearch('${block.miner}')">${block.miner}</div></div>
+                    <div class="result-item"><div class="item-label">Parent Hash</div><div class="item-value mono">${shortHash(block.parentHash)}</div></div>
+                </div>
+                ${txListHTML}
             `;
             card.classList.add('active');
+            card.scrollIntoView({ behavior: 'smooth' });
         }
 
-        async function searchTx(hash) {
-            const tx = await rpcCall('eth_getTransactionByHash', [hash]);
+        // Display Transaction
+        async function displayTx(hash, tx) {
             if (!tx) throw new Error('Transaction not found');
-            
-            const receipt = await rpcCall('eth_getTransactionReceipt', [hash]);
-            
+            document.getElementById('addressTabs').style.display = 'none';
             const card = document.getElementById('resultCard');
+            let receipt = null;
+            try { receipt = await rpc('eth_getTransactionReceipt', [hash]); } catch(e) {}
+
+            const method = decodeMethod(tx.input);
+            const status = receipt ? (receipt.status === '0x1' ? '✅ Success' : '❌ Failed') : '⏳ Pending';
+            const statusClass = receipt ? (receipt.status === '0x1' ? 'green-text' : 'red-text') : '';
+            const valueETH = formatEth(tx.value);
+            const gasPrice = tx.gasPrice ? formatEth(tx.gasPrice, 9) : 'N/A';
+            const gasUsed = receipt ? hexToNum(receipt.gasUsed) : 'Pending';
+            const txnFee = receipt && tx.gasPrice ? formatEth('0x'+(BigInt(receipt.gasUsed)*BigInt(tx.gasPrice)).toString(16)) : 'Pending';
+            const logsCount = receipt ? (receipt.logs ? receipt.logs.length : 0) : 0;
+
+            let logsHTML = '';
+            if (receipt && receipt.logs && receipt.logs.length > 0) {
+                logsHTML = '<div style="margin-top:16px;"><h4 style="margin-bottom:12px;">📋 Event Logs ('+receipt.logs.length+')</h4>';
+                receipt.logs.slice(0, 10).forEach((log, i) => {
+                    const contractName = KNOWN_TOKENS[log.address] ? KNOWN_TOKENS[log.address].symbol : short(log.address);
+                    logsHTML += `<div style="background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;font-size:11px;font-family:monospace;">
+                        <span style="color:var(--accent)">Log #${i+1}</span> • Contract: <span style="color:var(--purple);cursor:pointer" onclick="quickSearch('${log.address}')">${contractName}</span>
+                        <br>Topics: ${log.topics.slice(0,3).map(t=>short(t)).join(', ')}
+                        <br>Data: ${short(log.data)}
+                    </div>`;
+                });
+                logsHTML += '</div>';
+            }
+
             card.innerHTML = `
-                <h3 style="margin-bottom:20px;">💸 Transaction</h3>
-                <div class="result-row"><span class="result-label">Tx Hash</span><span class="result-value">${tx.hash}</span></div>
-                <div class="result-row"><span class="result-label">Status</span><span class="result-value">${receipt && receipt.status === '0x1' ? '<span class="badge badge-success">Success</span>' : '<span class="badge badge-pending">Pending</span>'}</span></div>
-                <div class="result-row"><span class="result-label">Block</span><span class="result-value hash" onclick="searchBlock(${parseInt(tx.blockNumber, 16)})">#${parseInt(tx.blockNumber, 16).toLocaleString()}</span></div>
-                <div class="result-row"><span class="result-label">From</span><span class="result-value address" onclick="searchAddress('${tx.from}')">${tx.from}</span></div>
-                <div class="result-row"><span class="result-label">To</span><span class="result-value address" onclick="searchAddress('${tx.to}')">${tx.to || 'Contract Creation'}</span></div>
-                <div class="result-row"><span class="result-label">Value</span><span class="result-value">${weiToEth(tx.value)} ETH</span></div>
-                <div class="result-row"><span class="result-label">Gas Price</span><span class="result-value">${parseInt(tx.gasPrice, 16).toLocaleString()} wei</span></div>
-                <div class="result-row"><span class="result-label">Gas Used</span><span class="result-value">${receipt ? parseInt(receipt.gasUsed, 16).toLocaleString() : 'Pending'}</span></div>
+                <h3 style="margin-bottom:20px;font-size:18px;">💸 Transaction <span class="badge badge-${statusClass.includes('green')?'success':'pending'}">${status}</span></h3>
+                <div class="result-grid">
+                    <div class="result-item full"><div class="item-label">Transaction Hash</div><div class="item-value">${hash} <button class="copy-btn" onclick="copyText('${hash}')">📋</button></div></div>
+                    <div class="result-item"><div class="item-label">Status</div><div class="item-value ${statusClass}">${status}</div></div>
+                    <div class="result-item"><div class="item-label">Block</div><div class="item-value mono" onclick="quickSearch('${parseInt(tx.blockNumber,16)}')">#${hexToNum(tx.blockNumber)}</div></div>
+                    <div class="result-item"><div class="item-label">Timestamp</div><div class="item-value">${timeAgo(tx.blockNumber ? '0x1' : '0x0')}</div></div>
+                    <div class="result-item"><div class="item-label">From</div><div class="item-value mono" onclick="quickSearch('${tx.from}')">${tx.from} <button class="copy-btn" onclick="copyText('${tx.from}')">📋</button></div></div>
+                    <div class="result-item"><div class="item-label">To</div><div class="item-value mono" onclick="quickSearch('${tx.to||''}')">${tx.to || '📜 Contract Creation'} ${tx.to ? '<button class="copy-btn" onclick=copyText(\''+tx.to+'\')>📋</button>' : ''}</div></div>
+                    <div class="result-item"><div class="item-label">Value</div><div class="item-value big">${valueETH} ETH</div></div>
+                    <div class="result-item"><div class="item-label">Method</div><div class="item-value"><span class="method-badge">${method.name}</span></div></div>
+                    <div class="result-item"><div class="item-label">Gas Price</div><div class="item-value">${gasPrice} ETH</div></div>
+                    <div class="result-item"><div class="item-label">Gas Used</div><div class="item-value">${gasUsed}</div></div>
+                    <div class="result-item"><div class="item-label">Txn Fee</div><div class="item-value">${txnFee} ETH</div></div>
+                    <div class="result-item"><div class="item-label">Nonce</div><div class="item-value">${hexToNum(tx.nonce)}</div></div>
+                    <div class="result-item"><div class="item-label">Input Data</div><div class="item-value" style="font-size:10px;">${tx.input === '0x' ? 'None (ETH Transfer)' : short(tx.input)}</div></div>
+                    <div class="result-item"><div class="item-label">Event Logs</div><div class="item-value">${logsCount}</div></div>
+                </div>
+                ${logsHTML}
             `;
             card.classList.add('active');
+            card.scrollIntoView({ behavior: 'smooth' });
         }
 
+        // Search Address
         async function searchAddress(addr) {
-            const balance = await rpcCall('eth_getBalance', [addr, 'latest']);
-            const txCount = await rpcCall('eth_getTransactionCount', [addr, 'latest']);
-            
+            currentAddressData = { address: addr };
             const card = document.getElementById('resultCard');
-            card.innerHTML = `
-                <h3 style="margin-bottom:20px;">👛 Address</h3>
-                <div class="result-row"><span class="result-label">Address</span><span class="result-value">${addr}</span></div>
-                <div class="result-row"><span class="result-label">Balance</span><span class="result-value" style="font-size:20px;font-weight:700;color:var(--accent);">${weiToEth(balance)} ETH</span></div>
-                <div class="result-row"><span class="result-label">Transactions</span><span class="result-value">${parseInt(txCount, 16)}</span></div>
-            `;
+            card.innerHTML = '<div class="loading-container"><div class="spinner"></div>Loading address data...</div>';
             card.classList.add('active');
+
+            const [balance, txCount, code] = await Promise.all([
+                rpc('eth_getBalance', [addr, 'latest']).catch(() => '0x0'),
+                rpc('eth_getTransactionCount', [addr, 'latest']).catch(() => '0x0'),
+                rpc('eth_getCode', [addr, 'latest']).catch(() => '0x'),
+            ]);
+
+            const isContract = code && code !== '0x';
+            const ethBalance = formatEth(balance);
+            const txCountNum = hexToNum(txCount);
+
+            // Check if it's a known token
+            const knownToken = KNOWN_TOKENS[addr];
+
+            card.innerHTML = `
+                <h3 style="margin-bottom:20px;font-size:18px;">
+                    ${knownToken ? '🪙 ' + knownToken.symbol + ' (' + knownToken.name + ')' : (isContract ? '📜 Contract' : '👛 Address')}
+                    ${isContract ? ' <span class="badge badge-contract">Contract</span>' : ''}
+                    ${knownToken ? ' <span class="badge badge-token">'+knownToken.symbol+'</span>' : ''}
+                </h3>
+                <div class="result-grid">
+                    <div class="result-item full"><div class="item-label">Address</div><div class="item-value">${addr} <button class="copy-btn" onclick="copyText('${addr}')">📋</button></div></div>
+                    <div class="result-item"><div class="item-label">ETH Balance</div><div class="item-value big">${ethBalance} ETH</div></div>
+                    <div class="result-item"><div class="item-label">Transactions</div><div class="item-value big purple">${txCountNum}</div></div>
+                    <div class="result-item"><div class="item-label">Type</div><div class="item-value">${isContract ? 'Smart Contract' : 'Externally Owned Account (EOA)'}</div></div>
+                    <div class="result-item"><div class="item-label">Token</div><div class="item-value">${knownToken ? '✅ Verified: ' + knownToken.name : '—'}</div></div>
+                </div>
+            `;
+
+            // Show tabs for address
+            document.getElementById('addressTabs').style.display = 'block';
+            document.getElementById('tab-transactions').innerHTML = '<div class="loading-container"><div class="spinner"></div>Loading transactions...</div>';
+            document.getElementById('tab-tokens').innerHTML = '<div class="loading-container"><div class="spinner"></div>Loading token balances...</div>';
+            document.getElementById('tab-internal').innerHTML = '<div class="empty-state">⚡ Internal transactions require debug API (not available on standard Anvil)</div>';
+            document.getElementById('tab-logs').innerHTML = '<div class="empty-state">📋 Event logs shown in transaction details above</div>';
+
+            // Load token balances
+            loadTokenBalances(addr);
+            loadRecentTxs(addr);
+
+            card.scrollIntoView({ behavior: 'smooth' });
         }
 
-        // Enter key search
-        document.getElementById('searchInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') search();
-        });
+        // Load Token Balances
+        async function loadTokenBalances(addr) {
+            const container = document.getElementById('tab-tokens');
+            let html = '<h4 style="margin-bottom:14px;">🪙 Token Holdings</h4><div class="token-list">';
+
+            // ETH
+            const ethBal = await rpc('eth_getBalance', [addr, 'latest']).catch(() => '0x0');
+            html += `<div class="token-card">
+                <div class="token-icon eth">⟠</div>
+                <div class="token-info"><div class="token-symbol">ETH</div><div class="token-name">Ethereum Native</div></div>
+                <div class="token-balance">${formatEth(ethBal)}</div>
+            </div>`;
+
+            // Check known tokens
+            for (const [contractAddr, token] of Object.entries(KNOWN_TOKENS)) {
+                try {
+                    const data = '0x70a08231000000000000000000000000' + addr.slice(2);
+                    const result = await rpc('eth_call', [{ to: contractAddr, data }, 'latest']);
+                    if (result && result !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+                        const balance = token.decimals === 6 ? formatUSD(result) : formatEth(result);
+                        html += `<div class="token-card" onclick="quickSearch('${contractAddr}')" style="cursor:pointer;">
+                            <div class="token-icon ${token.icon}">${token.symbol[0]}</div>
+                            <div class="token-info"><div class="token-symbol">${token.symbol}</div><div class="token-name">${token.name}</div></div>
+                            <div class="token-balance">${balance}</div>
+                        </div>`;
+                    }
+                } catch(e) { /* token not available */ }
+            }
+
+            html += '</div>';
+            if (html.indexOf('token-card') === html.lastIndexOf('token-card')) {
+                html += '<div class="empty-state">No additional tokens found</div>';
+            }
+            container.innerHTML = html;
+        }
+
+        // Load Recent Transactions for Address
+        async function loadRecentTxs(addr) {
+            const container = document.getElementById('tab-transactions');
+            try {
+                const latestBlock = await rpc('eth_blockNumber');
+                const latest = parseInt(latestBlock, 16);
+                let txs = [];
+                for (let i = 0; i < 10 && txs.length < 10; i++) {
+                    const block = await rpc('eth_getBlockByNumber', ['0x'+(latest-i).toString(16), true]);
+                    if (block && block.transactions) {
+                        for (const tx of block.transactions) {
+                            if ((tx.from && tx.from.toLowerCase() === addr.toLowerCase()) ||
+                                (tx.to && tx.to.toLowerCase() === addr.toLowerCase())) {
+                                txs.push(tx);
+                                if (txs.length >= 10) break;
+                            }
+                        }
+                    }
+                }
+
+                if (txs.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No transactions found for this address</div>';
+                    return;
+                }
+
+                let html = '<div class="table-wrapper"><table><thead><tr><th>Tx Hash</th><th>Block</th><th>Age</th><th>From</th><th style="text-align:center">→</th><th>To</th><th>Value</th></tr></thead><tbody>';
+                txs.forEach(tx => {
+                    const isOut = tx.from.toLowerCase() === addr.toLowerCase();
+                    const dir = isOut ? '<span class="badge badge-out">OUT</span>' : '<span class="badge badge-in">IN</span>';
+                    html += `<tr>
+                        <td><span class="mono" onclick="document.getElementById('searchInput').value='${tx.hash}';doSearch();">${shortHash(tx.hash)}</span></td>
+                        <td><span class="mono" onclick="quickSearch('${parseInt(tx.blockNumber,16)}')">#${hexToNum(tx.blockNumber)}</span></td>
+                        <td style="font-size:11px;color:var(--text-secondary)">${timeAgo(tx.blockNumber?'0x1':'0x0')}</td>
+                        <td><span class="mono-secondary">${short(tx.from)}</span></td>
+                        <td style="text-align:center">${dir}</td>
+                        <td><span class="mono-secondary">${short(tx.to)}</span></td>
+                        <td class="${isOut?'amount-out':'amount-in'}">${formatEth(tx.value)} ETH</td>
+                    </tr>`;
+                });
+                html += '</tbody></table></div>';
+                container.innerHTML = html;
+            } catch(e) {
+                container.innerHTML = `<div class="error-box active">Failed to load transactions: ${e.message}</div>`;
+            }
+        }
+
+        // Tab switching
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`.tab:nth-${['transactions','tokens','internal','logs'].indexOf(tabName)+1}`).classList.add('active');
+            document.getElementById('tab-'+tabName).classList.add('active');
+        }
+
+        // Load Stats
+        async function loadStats() {
+            try {
+                const [block, gasPrice, accounts] = await Promise.all([
+                    rpc('eth_blockNumber'),
+                    rpc('eth_gasPrice'),
+                    rpc('eth_accounts'),
+                ]);
+                document.getElementById('statBlock').textContent = hexToNum(block);
+                document.getElementById('statGas').textContent = formatEth(gasPrice, 9) + ' ETH';
+                document.getElementById('statAccounts').textContent = accounts ? accounts.length : '—';
+            } catch(e) { /* silent */ }
+        }
+
+        // Load Blocks Table
+        async function loadBlocks() {
+            const tbody = document.getElementById('blocksTable');
+            try {
+                const latestBlock = await rpc('eth_blockNumber');
+                const latest = parseInt(latestBlock, 16);
+                let html = '';
+                for (let i = 0; i < 8; i++) {
+                    const num = latest - i;
+                    if (num < 0) break;
+                    const block = await rpc('eth_getBlockByNumber', ['0x'+num.toString(16), false]);
+                    const txCount = Array.isArray(block.transactions) ? block.transactions.length : 0;
+                    const gasUsed = hexToNum(block.gasUsed);
+                    const gasLimit = hexToNum(block.gasLimit);
+                    const baseFee = block.baseFeePerGas ? formatEth(block.baseFeePerGas, 9) : '—';
+                    html += `<tr>
+                        <td><span class="mono" onclick="quickSearch('${num}')">#${num.toLocaleString()}</span></td>
+                        <td style="font-size:11px;color:var(--text-secondary)">${timeAgo(block.timestamp)}</td>
+                        <td><span class="mono-secondary">${short(block.miner)}</span></td>
+                        <td><span class="badge ${txCount>0?'badge-success':'badge-pending'}">${txCount} txns</span></td>
+                        <td>${gasUsed}</td>
+                        <td>${gasLimit}</td>
+                        <td>${baseFee}</td>
+                    </tr>`;
+                }
+                document.getElementById('blockCount').textContent = `Showing ${i} blocks`;
+                tbody.innerHTML = html;
+            } catch(e) {
+                tbody.innerHTML = '<tr><td colspan="7"><div class="error-box active">RPC Connection Error: Ensure Anvil is running</div></td></tr>';
+            }
+        }
+
+        // Load Transactions Table
+        async function loadTxTable() {
+            const tbody = document.getElementById('txTable');
+            try {
+                const latestBlock = await rpc('eth_blockNumber');
+                const latest = parseInt(latestBlock, 16);
+                let txs = [];
+                for (let i = 0; i < 5 && txs.length < 8; i++) {
+                    const block = await rpc('eth_getBlockByNumber', ['0x'+(latest-i).toString(16), true]);
+                    if (block && block.transactions) {
+                        for (const tx of block.transactions) {
+                            if (txs.length >= 8) break;
+                            txs.push({...tx, blockNum: latest-i});
+                        }
+                    }
+                }
+
+                let html = '';
+                txs.forEach(tx => {
+                    const method = decodeMethod(tx.input);
+                    const val = formatEth(tx.value);
+                    html += `<tr>
+                        <td><span class="mono" onclick="quickSearch('${tx.hash}')">${shortHash(tx.hash)}</span></td>
+                        <td><span class="method-badge">${method.name}</span></td>
+                        <td><span class="mono" onclick="quickSearch('${tx.blockNum}')">#${tx.blockNum.toLocaleString()}</span></td>
+                        <td style="font-size:11px;color:var(--text-secondary)">${timeAgo('0x'+(tx.blockNum).toString(16))}</td>
+                        <td><span class="mono-secondary" onclick="quickSearch('${tx.from}')">${short(tx.from)}</span></td>
+                        <td style="text-align:center"><span class="badge ${tx.to?'badge-out':'badge-contract'}">${tx.to?'→':'📜'}</span></td>
+                        <td><span class="mono-secondary" onclick="quickSearch('${tx.to||''}')">${tx.to?short(tx.to):'Contract'}</span></td>
+                        <td class="amount-neutral">${val} ETH</td>
+                        <td style="font-size:10px;color:var(--text-secondary)">—</td>
+                    </tr>`;
+                });
+
+                if (html === '') html = '<tr><td colspan="9"><div class="empty-state">🏗 No transactions yet — start sending!</div></td></tr>';
+                tbody.innerHTML = html;
+            } catch(e) {
+                tbody.innerHTML = '<tr><td colspan="9"><div class="error-box active">Cannot load transactions</div></td></tr>';
+            }
+        }
+
+        // Enter key
+        document.getElementById('searchInput').addEventListener('keypress', e => { if (e.key === 'Enter') doSearch(); });
 
         // Initial load
         loadStats();
         loadBlocks();
-        loadTransactions();
+        loadTxTable();
 
-        // Auto-refresh every 10 seconds
+        // Auto-refresh
         setInterval(() => {
             loadStats();
             loadBlocks();
-            loadTransactions();
+            loadTxTable();
         }, 10000);
+
+        // Initial search if URL has hash
+        if (window.location.hash) {
+            document.getElementById('searchInput').value = window.location.hash.slice(1);
+            doSearch();
+        }
     </script>
 </body>
-</html> 
+</html>
