@@ -55,6 +55,7 @@
         .badge-contract { background: #1b1b3a; color: var(--purple); }
         .badge-out { color: var(--red); background: #49020220; }
         .badge-in { color: var(--green); background: #04260f40; }
+        .badge-token-tx { background: #1b1b3a; color: #93c5fd; }
         
         .result-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 24px; margin-bottom: 16px; display: none; }
         .result-card.show { display: block; animation: fadeIn 0.3s ease; }
@@ -190,14 +191,41 @@
 
         function short(a) { return a ? a.slice(0,6)+'...'+a.slice(-4) : '—'; }
         function shortHash(h) { return h ? h.slice(0,8)+'...'+h.slice(-6) : '—'; }
-        function weiToEth(w) { return (BigInt(w||'0x0') / BigInt('1000000000000000000')).toString(); }
+        function weiToEth(w) { return (Number(BigInt(w||'0x0')) / 1e18).toString(); }
         function timeAgo(ts) { const s = Math.floor(Date.now()/1000 - parseInt(ts,16)); if(s<5) return 'just now'; if(s<60) return s+'s ago'; if(s<3600) return Math.floor(s/60)+'m ago'; return Math.floor(s/3600)+'h ago'; }
         function hexNum(h) { return parseInt(h,16).toLocaleString(); }
+        
+        // Decode method AND token transfer details
         function decodeMethod(data) {
-            if (!data || data === '0x') return 'Transfer';
+            if (!data || data === '0x') return { name: 'Transfer', type: 'ETH' };
             const sig = data.slice(0,10);
-            const methods = { '0xa9059cbb': 'Transfer', '0x095ea7b3': 'Approve', '0x23b872dd': 'TransferFrom', '0x70a08231': 'balanceOf' };
-            return methods[sig] || sig.slice(0,8);
+            const methods = { 
+                '0xa9059cbb': { name: 'Transfer', type: 'ERC20' }, 
+                '0x095ea7b3': { name: 'Approve', type: 'ERC20' }, 
+                '0x23b872dd': { name: 'TransferFrom', type: 'ERC20' }, 
+                '0x70a08231': { name: 'balanceOf', type: 'Read' },
+                '0x313ce567': { name: 'decimals', type: 'Read' },
+                '0x18160ddd': { name: 'totalSupply', type: 'Read' },
+            };
+            return methods[sig] || { name: sig.slice(0,8), type: 'Contract' };
+        }
+        
+        // Find token by contract address
+        function findToken(addr) {
+            if (!addr) return null;
+            for (const [key, t] of Object.entries(TOKENS)) {
+                if (t.addr.toLowerCase() === addr.toLowerCase()) return t;
+            }
+            return null;
+        }
+        
+        // Format token amount
+        function fmtToken(amountHex, decimals) {
+            const val = Number(BigInt(amountHex || '0x0')) / Math.pow(10, decimals);
+            if (val > 1e9) return (val/1e9).toFixed(2) + 'B';
+            if (val > 1e6) return (val/1e6).toFixed(2) + 'M';
+            if (val > 1000) return val.toLocaleString(undefined, {maximumFractionDigits:2});
+            return val.toFixed(decimals <= 6 ? 2 : 6);
         }
 
         function copyText(t) { navigator.clipboard.writeText(t); }
@@ -221,10 +249,13 @@
                 }
                 if (/^\d+$/.test(input)) return await searchBlock(parseInt(input));
                 if (input.length === 66 && input.startsWith('0x')) {
+                    // Try as transaction first
                     const tx = await rpc('eth_getTransactionByHash', [input]).catch(()=>null);
                     if (tx && tx.hash) return displayTx(input, tx);
+                    // Try as block hash
                     const block = await rpc('eth_getBlockByHash', [input, true]).catch(()=>null);
                     if (block && block.hash) return displayBlock(block);
+                    // Fallback to address
                     return displayAddress(input);
                 }
                 if (input.length === 42 && input.startsWith('0x')) return await displayAddress(input);
@@ -249,7 +280,10 @@
                 txList = '<h4 style="margin-top:14px;">📝 Transactions ('+txCount+')</h4>';
                 block.transactions.slice(0,15).forEach((tx,i) => {
                     const h = typeof tx === 'string' ? tx : tx.hash;
-                    txList += `<div class="mono" style="padding:4px 0;cursor:pointer;" onclick="quickSearch('${h}')">#${i+1} ${shortHash(h)}</div>`;
+                    const method = typeof tx === 'object' ? decodeMethod(tx.input) : { name: 'Unknown', type: '?' };
+                    const tokenTo = typeof tx === 'object' ? findToken(tx.to) : null;
+                    const label = tokenTo ? ` ${tokenTo.icon} ${tokenTo.sym}` : (method.type === 'ERC20' ? ' 🪙 Token' : '');
+                    txList += `<div class="mono" style="padding:4px 0;cursor:pointer;" onclick="quickSearch('${h}')">#${i+1} ${shortHash(h)} <span class="method-badge">${method.name}</span>${label}</div>`;
                 });
             }
             card.innerHTML = `
@@ -274,11 +308,73 @@
             if (!tx) throw new Error('Transaction not found');
             let receipt = null;
             try { receipt = await rpc('eth_getTransactionReceipt', [hash]); } catch(e) {}
+            
             const method = decodeMethod(tx.input);
             const status = receipt ? (receipt.status === '0x1' ? '✅ Success' : '❌ Failed') : '⏳ Pending';
             const valEth = weiToEth(tx.value);
             const gasPrice = tx.gasPrice ? (parseInt(tx.gasPrice,16)/1e9).toFixed(2) : 'N/A';
             const gasUsed = receipt ? hexNum(receipt.gasUsed) : 'Pending';
+            
+            // Detect token transfer
+            const tokenTo = findToken(tx.to);
+            let tokenTransferInfo = '';
+            let mainValue = valEth + ' ETH';
+            
+            if (method.type === 'ERC20' && tx.input && tx.input.length >= 138) {
+                // Parse ERC20 transfer data
+                const sig = tx.input.slice(0,10);
+                if (sig === '0xa9059cbb' || sig === '0x23b872dd') {
+                    let recipient, amountHex;
+                    if (sig === '0xa9059cbb') {
+                        recipient = '0x' + tx.input.slice(34,74);
+                        amountHex = '0x' + tx.input.slice(74,138);
+                    } else {
+                        // TransferFrom
+                        recipient = '0x' + tx.input.slice(98,138);
+                        amountHex = '0x' + tx.input.slice(138);
+                    }
+                    const token = tokenTo || { sym: 'TOKEN', dec: 18, icon: '🪙', name: 'Unknown Token' };
+                    const amount = fmtToken(amountHex, token.dec);
+                    tokenTransferInfo = `
+                        <div class="result-item full" style="border-color: #1b1b3a; background: #0d0d1a;">
+                            <div class="rlabel">🪙 Token Transfer (${token.icon} ${token.sym})</div>
+                            <div class="rvalue" style="font-size:14px;">
+                                <strong>Amount:</strong> <span style="color:var(--accent);font-weight:800;">${amount} ${token.sym}</span><br>
+                                <strong>To:</strong> <span class="mono" onclick="quickSearch('${recipient}')">${recipient}</span><br>
+                                <strong>Contract:</strong> <span class="mono" onclick="quickSearch('${tx.to}')">${tx.to}</span>
+                            </div>
+                        </div>`;
+                    mainValue = '<span style="font-size:14px;">0 ETH</span> <span class="badge badge-token-tx">+ ' + amount + ' ' + token.sym + '</span>';
+                }
+            }
+            
+            if (tokenTo && !tokenTransferInfo) {
+                tokenTransferInfo = `
+                    <div class="result-item full" style="border-color: #1b1b3a;">
+                        <div class="rlabel">🪙 Contract Interaction</div>
+                        <div class="rvalue">Interacting with <span class="mono" onclick="quickSearch('${tx.to}')">${tokenTo.icon} ${tokenTo.sym} (${tokenTo.name})</span></div>
+                    </div>`;
+            }
+            
+            // Decode logs for token transfers
+            let logsHTML = '';
+            if (receipt && receipt.logs && receipt.logs.length > 0) {
+                logsHTML = '<h4 style="margin-top:14px;">📋 Event Logs</h4>';
+                receipt.logs.slice(0,8).forEach((log, i) => {
+                    const logToken = findToken(log.address);
+                    let logInfo = '';
+                    if (logToken && log.topics.length >= 3 && log.topics[0] === '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef') {
+                        const from = '0x' + log.topics[1].slice(26);
+                        const to = '0x' + log.topics[2].slice(26);
+                        const amount = fmtToken(log.data, logToken.dec);
+                        logInfo = `<br><span style="color:var(--green);">🪙 ${logToken.icon} ${amount} ${logToken.sym}</span> from <span class="mono" onclick="quickSearch('${from}')">${short(from)}</span> → <span class="mono" onclick="quickSearch('${to}')">${short(to)}</span>`;
+                    }
+                    logsHTML += `<div style="background:#0a0e17;border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px;font-size:10px;font-family:monospace;">
+                        Log #${i}: <span class="mono" onclick="quickSearch('${log.address}')">${logToken ? logToken.icon + ' ' + logToken.sym : short(log.address)}</span>${logInfo}
+                    </div>`;
+                });
+            }
+
             const card = document.getElementById('resultCard');
             card.innerHTML = `
                 <h3>💸 Transaction <span class="badge ${receipt?.status==='0x1'?'badge-success':'badge-pending'}">${status}</span></h3>
@@ -287,13 +383,15 @@
                     <div class="result-item"><div class="rlabel">Block</div><div class="rvalue mono" onclick="quickSearch('${hexNum(tx.blockNumber)}')">#${hexNum(tx.blockNumber)}</div></div>
                     <div class="result-item"><div class="rlabel">From</div><div class="rvalue mono" onclick="quickSearch('${tx.from}')">${tx.from}</div></div>
                     <div class="result-item"><div class="rlabel">To</div><div class="rvalue mono" onclick="quickSearch('${tx.to||''}')">${tx.to || '📜 Contract Creation'}</div></div>
-                    <div class="result-item"><div class="rlabel">Value</div><div class="rvalue big">${valEth} ETH</div></div>
-                    <div class="result-item"><div class="rlabel">Method</div><div class="rvalue"><span class="method-badge">${method}</span></div></div>
+                    <div class="result-item"><div class="rlabel">Value</div><div class="rvalue big">${mainValue}</div></div>
+                    <div class="result-item"><div class="rlabel">Method</div><div class="rvalue"><span class="method-badge">${method.name}</span> <span style="font-size:9px;color:var(--text2);">${method.type}</span></div></div>
                     <div class="result-item"><div class="rlabel">Gas Price</div><div class="rvalue">${gasPrice} Gwei</div></div>
                     <div class="result-item"><div class="rlabel">Gas Used</div><div class="rvalue">${gasUsed}</div></div>
                     <div class="result-item"><div class="rlabel">Nonce</div><div class="rvalue">${hexNum(tx.nonce)}</div></div>
-                    <div class="result-item"><div class="rlabel">Input</div><div class="rvalue" style="font-size:9px;">${tx.input === '0x' ? 'None (ETH Transfer)' : tx.input.slice(0,60)+'...'}</div></div>
+                    ${tokenTransferInfo || ''}
+                    <div class="result-item"><div class="rlabel">Input Data</div><div class="rvalue" style="font-size:9px;">${tx.input === '0x' ? 'None (ETH Transfer)' : tx.input.slice(0,80)+'...'}</div></div>
                 </div>
+                ${logsHTML}
             `;
             card.classList.add('show');
             card.scrollIntoView({ behavior: 'smooth' });
@@ -312,7 +410,6 @@
             const isContract = code && code !== '0x';
             const ethBalance = weiToEth(balance);
 
-            // Check known tokens
             const tokenInfo = Object.entries(TOKENS).find(([k,t]) => t.addr.toLowerCase() === addr.toLowerCase());
             let tokenLabel = '';
             if (tokenInfo) {
@@ -320,42 +417,62 @@
                 tokenLabel = ` <span class="badge badge-contract">${t.icon} ${t.sym} Token</span>`;
             }
 
-            // Token balances
+            // ALL token balances
             let tokenBalancesHTML = '<h4 style="margin-top:16px;">🪙 Token Holdings</h4><div class="token-balances">';
-            tokenBalancesHTML += `<div class="token-bal"><div class="tb-icon">⟠</div><div class="tb-info"><div class="tb-sym">ETH</div><div class="tb-name">Ethereum Native</div></div><div class="tb-amt">${ethBalance}</div></div>`;
+            tokenBalancesHTML += `<div class="token-bal"><div class="tb-icon">⟠</div><div class="tb-info"><div class="tb-sym">ETH</div><div class="tb-name">Ethereum Native</div></div><div class="tb-amt">${Number(ethBalance).toLocaleString(undefined,{maximumFractionDigits:4})}</div></div>`;
             
             for (const [key, t] of Object.entries(TOKENS)) {
                 try {
                     const data = '0x70a08231000000000000000000000000' + addr.slice(2);
                     const bal = await rpc('eth_call', [{ to: t.addr, data }, 'latest']);
-                    const human = parseInt(bal,16) / Math.pow(10, t.dec);
-                    if (human > 0) {
-                        tokenBalancesHTML += `<div class="token-bal">
-                            <div class="tb-icon">${t.icon}</div>
-                            <div class="tb-info"><div class="tb-sym">${t.sym}</div><div class="tb-name">${t.name}</div></div>
-                            <div class="tb-amt">${human.toLocaleString()}</div>
-                        </div>`;
-                    }
-                } catch(e) {}
+                    const human = Number(BigInt(bal)) / Math.pow(10, t.dec);
+                    tokenBalancesHTML += `<div class="token-bal">
+                        <div class="tb-icon">${t.icon}</div>
+                        <div class="tb-info"><div class="tb-sym">${t.sym}</div><div class="tb-name">${t.name}</div></div>
+                        <div class="tb-amt">${human > 0 ? human.toLocaleString(undefined,{maximumFractionDigits:2}) : '0'}</div>
+                    </div>`;
+                } catch(e) {
+                    tokenBalancesHTML += `<div class="token-bal">
+                        <div class="tb-icon">${t.icon}</div>
+                        <div class="tb-info"><div class="tb-sym">${t.sym}</div><div class="tb-name">${t.name}</div></div>
+                        <div class="tb-amt">—</div>
+                    </div>`;
+                }
             }
             tokenBalancesHTML += '</div>';
 
-            // Recent transactions
+            // Recent transactions with token detection
             let txHTML = '<h4 style="margin-top:16px;">💸 Recent Transactions</h4><div class="tx-list">';
             try {
                 const latestBlock = await rpc('eth_blockNumber');
                 const latest = parseInt(latestBlock, 16);
                 let found = 0;
-                for (let i = 0; i < 15 && found < 8; i++) {
+                for (let i = 0; i < 15 && found < 10; i++) {
                     const block = await rpc('eth_getBlockByNumber', ['0x'+(latest-i).toString(16), true]);
                     if (block?.transactions) {
                         for (const tx of block.transactions) {
-                            if ((tx.from?.toLowerCase() === addr.toLowerCase() || tx.to?.toLowerCase() === addr.toLowerCase()) && found < 8) {
+                            if ((tx.from?.toLowerCase() === addr.toLowerCase() || tx.to?.toLowerCase() === addr.toLowerCase()) && found < 10) {
                                 const isOut = tx.from?.toLowerCase() === addr.toLowerCase();
+                                const method = decodeMethod(tx.input);
+                                const tokTo = findToken(tx.to);
+                                
+                                // Check for token transfer
+                                let valueDisplay = weiToEth(tx.value) + ' ETH';
+                                if (method.type === 'ERC20' && tx.input && tx.input.length >= 138) {
+                                    const sig = tx.input.slice(0,10);
+                                    if (sig === '0xa9059cbb') {
+                                        const amountHex = '0x' + tx.input.slice(74,138);
+                                        const token = tokTo || { sym: 'TOKEN', dec: 18, icon: '🪙' };
+                                        const amount = fmtToken(amountHex, token.dec);
+                                        valueDisplay = `<span style="color:var(--purple);">${amount} ${token.sym}</span>`;
+                                    }
+                                }
+                                
                                 txHTML += `<div style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--border);font-size:11px;">
                                     <span class="badge ${isOut?'badge-out':'badge-in'}">${isOut?'OUT':'IN'}</span>
                                     <span class="mono" onclick="quickSearch('${tx.hash}')">${shortHash(tx.hash)}</span>
-                                    <span>${weiToEth(tx.value)} ETH</span>
+                                    <span class="method-badge">${method.name}</span>
+                                    <span>${valueDisplay}</span>
                                     <span class="mono2">${timeAgo(block.timestamp)}</span>
                                 </div>`;
                                 found++;
@@ -424,14 +541,29 @@
                 let html = '';
                 txs.forEach(tx => {
                     const method = decodeMethod(tx.input);
+                    const tokTo = findToken(tx.to);
+                    let valueDisplay = weiToEth(tx.value) + ' ETH';
+                    
+                    // Check for token transfer in input data
+                    if (method.type === 'ERC20' && tx.input && tx.input.length >= 138) {
+                        const sig = tx.input.slice(0,10);
+                        if (sig === '0xa9059cbb') {
+                            const amountHex = '0x' + tx.input.slice(74,138);
+                            const token = tokTo || { sym: 'TOKEN', dec: 18 };
+                            valueDisplay = fmtToken(amountHex, token.dec) + ' ' + token.sym;
+                        }
+                    }
+                    
+                    const toDisplay = tokTo ? `${tokTo.icon} ${tokTo.sym}` : (tx.to ? short(tx.to) : 'Contract');
+                    
                     html += `<tr>
                         <td><span class="mono" onclick="quickSearch('${tx.hash}')">${shortHash(tx.hash)}</span></td>
-                        <td><span class="method-badge">${method}</span></td>
+                        <td><span class="method-badge">${method.name}</span></td>
                         <td><span class="mono" onclick="quickSearch('${tx.blockNum}')">#${tx.blockNum.toLocaleString()}</span></td>
                         <td class="mono2" onclick="quickSearch('${tx.from}')">${short(tx.from)}</td>
                         <td style="text-align:center;">${tx.to?'→':'📜'}</td>
-                        <td class="mono2" onclick="quickSearch('${tx.to||''}')">${tx.to?short(tx.to):'Contract'}</td>
-                        <td>${weiToEth(tx.value)} ETH</td>
+                        <td class="mono2" onclick="quickSearch('${tx.to||''}')">${toDisplay}</td>
+                        <td style="color:${method.type==='ERC20'?'var(--purple)':'var(--text)'};">${valueDisplay}</td>
                     </tr>`;
                 });
                 document.getElementById('txTable').innerHTML = html || '<tr><td colspan="7">No transactions yet</td></tr>';
