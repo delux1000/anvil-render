@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anvil Wallet Connect Pro</title>
+    <style>
+        :root {
+            --bg: #060a13;
+            --card: #0d1117;
+            --card-hover: #131a24;
+            --border: #21262d;
+            --text: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --green: #22c55e;
+            --green-bg: #04260f;
+            --red: #ef4444;
+            --red-bg: #490202;
+            --orange: #f59e0b;
+            --purple: #8b5cf6;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container { max-width: 560px; width: 100%; }
+
+        /* Header */
+        .header {
+            text-align: center;
+            padding: 40px 0 16px;
+        }
+        .header .icon { font-size: 56px; margin-bottom: 8px; }
+        .header h1 {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -1px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header p { color: var(--text-secondary); font-size: 13px; margin-top: 4px; }
+
+        /* Status Card */
+        .status-card {
+            background: var(--card);
+            border: 2px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        .status-card.disconnected { border-color: #374151; }
+        .status-card.connected {
+            border-color: #22c55e40;
+            background: linear-gradient(135deg, #0a1f0f50, #0d111750);
+            box-shadow: 0 0 30px rgba(34,197,94,0.1);
+        }
+        .status-card.locked {
+            border-color: #f59e0b40;
+            box-shadow: 0 0 30px rgba(245,158,11,0.15);
+        }
+
+        .status-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .status-dot.off { background: #6b7280; }
+        .status-dot.on { background: #22c55e; animation: pulse 2s infinite; }
+        .status-dot.locked { background: #f59e0b; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 50% { opacity: 0.4; box-shadow: 0 0 8px currentColor; } }
+        .status-text { font-weight: 700; font-size: 14px; }
+
+        .address-display {
+            font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+            font-size: 14px;
+            color: var(--accent);
+            margin: 8px 0;
+            word-break: break-all;
+            cursor: pointer;
+            padding: 6px 12px;
+            background: #0d1117;
+            border-radius: 8px;
+            display: inline-block;
+            max-width: 100%;
+            transition: all 0.2s;
+        }
+        .address-display:hover { background: #1a2236; color: #79c0ff; }
+
+        .balance-row {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .balance-item {
+            background: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 16px;
+            text-align: center;
+            min-width: 100px;
+            transition: all 0.2s;
+        }
+        .balance-item:hover { border-color: var(--accent); }
+        .balance-item .bal-label {
+            font-size: 9px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            font-weight: 600;
+        }
+        .balance-item .bal-value {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--accent);
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            margin-top: 2px;
+        }
+
+        .chain-badge {
+            background: #1a7f3720;
+            border: 1px solid #23863640;
+            color: #7ee787;
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            display: inline-block;
+            margin-top: 10px;
+            letter-spacing: 0.3px;
+        }
+        .lock-badge {
+            background: #f59e0b20;
+            border: 1px solid #f59e0b40;
+            color: #fbbf24;
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            display: inline-block;
+            margin-top: 4px;
+            margin-left: 6px;
+        }
+
+        /* Section Title */
+        .section-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+        /* Wallet Grid */
+        .wallet-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .wallet-btn {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 18px 14px;
+            cursor: pointer;
+            transition: all 0.25s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-align: left;
+            color: var(--text);
+            font-family: inherit;
+            font-size: 14px;
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+        .wallet-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(59,130,246,0.05), transparent);
+            transition: left 0.5s;
+        }
+        .wallet-btn:hover::before { left: 100%; }
+        .wallet-btn:hover {
+            border-color: var(--accent);
+            background: var(--card-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(59,130,246,0.2);
+        }
+        .wallet-btn:active { transform: scale(0.97); }
+        .wallet-btn .wallet-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+        .wallet-btn .wallet-info { flex: 1; min-width: 0; }
+        .wallet-btn .wallet-name { font-weight: 700; font-size: 13px; line-height: 1.2; }
+        .wallet-btn .wallet-desc { font-size: 10px; color: var(--text-secondary); line-height: 1.3; }
+        .wallet-tag {
+            font-size: 9px;
+            padding: 3px 9px;
+            border-radius: 8px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+        }
+        .tag-popular { background: #f59e0b20; color: #f59e0b; }
+        .tag-mobile { background: #8b5cf620; color: #a78bfa; }
+        .tag-new { background: #22c55e20; color: #4ade80; }
+
+        /* Buttons */
+        .btn {
+            width: 100%;
+            padding: 14px 20px;
+            border-radius: 12px;
+            border: none;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.25s;
+            font-family: inherit;
+            letter-spacing: 0.3px;
+        }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(59,130,246,0.3); }
+        .btn-danger { background: #dc262620; color: #ef4444; border: 1px solid #dc262640; }
+        .btn-danger:hover { background: #dc262630; }
+        .btn-warning { background: #f59e0b20; color: #fbbf24; border: 1px solid #f59e0b40; }
+        .btn-warning:hover { background: #f59e0b30; }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
+        /* Actions Grid */
+        .actions-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 14px;
+        }
+        .action-chip {
+            flex: 1;
+            min-width: 70px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            padding: 12px 8px;
+            border-radius: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.25s;
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        .action-chip:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--card-hover);
+            transform: translateY(-2px);
+        }
+        .action-chip .action-icon { font-size: 22px; display: block; margin-bottom: 5px; }
+        .action-chip.active { border-color: #f59e0b; color: #fbbf24; background: #f59e0b10; }
+
+        /* Input */
+        .input-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .input-group input {
+            flex: 1;
+            padding: 12px 14px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 12px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .input-group input:focus { border-color: var(--accent); }
+        .input-group input::placeholder { color: #484f58; }
+        .input-group button {
+            padding: 12px 18px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 700;
+            white-space: nowrap;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        .input-group button:hover { background: var(--accent-hover); }
+
+        /* Send Transaction */
+        .send-form {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 18px;
+            margin-top: 14px;
+        }
+        .send-form h4 { font-size: 13px; margin-bottom: 12px; color: var(--text-secondary); }
+        .send-form input, .send-form select {
+            width: 100%;
+            padding: 12px;
+            background: #0a0e17;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-family: monospace;
+            font-size: 12px;
+            margin-bottom: 8px;
+            outline: none;
+        }
+        .send-form input:focus { border-color: var(--accent); }
+        .send-form .tx-preview {
+            background: #0a0e17;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 11px;
+            font-family: monospace;
+            max-height: 120px;
+            overflow-y: auto;
+            margin-top: 8px;
+            color: var(--green);
+        }
+
+        /* Toast */
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: center;
+        }
+        .toast {
+            background: #1a1f2e;
+            border: 1px solid var(--border);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 13px;
+            animation: toastIn 0.3s ease, toastOut 0.3s 3s ease forwards;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+            white-space: nowrap;
+            max-width: 90vw;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .toast.success { border-color: #22c55e40; background: #0a1f0f; color: #4ade80; }
+        .toast.error { border-color: #ef444440; background: #1f0a0a; color: #f87171; }
+        .toast.warning { border-color: #f59e0b40; background: #1f1a0a; color: #fbbf24; }
+        @keyframes toastIn { from { opacity: 0; transform: translateY(20px); } }
+        @keyframes toastOut { to { opacity: 0; transform: translateY(-10px); } }
+
+        .hidden { display: none !important; }
+
+        /* Recent Wallets */
+        .recent-wallets {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .recent-chip {
+            background: var(--card);
+            border: 1px solid var(--border);
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-size: 11px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+            font-family: monospace;
+        }
+        .recent-chip:hover { border-color: var(--accent); background: var(--card-hover); }
+        .recent-chip .rc-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+
+        details { margin-top: 16px; }
+        summary {
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-size: 11px;
+            padding: 8px 0;
+            transition: color 0.2s;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        summary:hover { color: var(--text); }
+
+        .footer-note {
+            text-align: center;
+            margin-top: 28px;
+            padding: 14px;
+            color: var(--text-secondary);
+            font-size: 10px;
+            letter-spacing: 0.5px;
+            border-top: 1px solid var(--border);
+        }
+
+        @media (max-width: 400px) {
+            .wallet-grid { grid-template-columns: 1fr; }
+            .actions-row { gap: 6px; }
+            .action-chip { padding: 10px 4px; font-size: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="icon">🔗</div>
+            <h1>Anvil Wallet Connect</h1>
+            <p>Connect any Web3 wallet to Anvil Chain • RPC: anvil-render-q5wl.onrender.com</p>
+        </div>
+
+        <!-- Status Card -->
+        <div class="status-card disconnected" id="statusCard">
+            <div class="status-row">
+                <span class="status-dot off" id="statusDot"></span>
+                <span class="status-text" id="statusText">Not Connected</span>
+            </div>
+            <div class="address-display hidden" id="addressDisplay" onclick="copyAddress()" title="Click to copy address"></div>
+            <div class="balance-row hidden" id="balanceRow">
+                <div class="balance-item">
+                    <div class="bal-label">ETH Balance</div>
+                    <div class="bal-value" id="ethBalance">—</div>
+                </div>
+                <div class="balance-item">
+                    <div class="bal-label">Network</div>
+                    <div class="bal-value" id="chainDisplay" style="font-size:14px;">Chain 1</div>
+                </div>
+                <div class="balance-item">
+                    <div class="bal-label">TX Count</div>
+                    <div class="bal-value" id="txCount" style="font-size:14px;">—</div>
+                </div>
+            </div>
+            <div>
+                <span class="chain-badge hidden" id="chainBadge">⛓ Anvil RPC Active</span>
+                <span class="lock-badge hidden" id="lockBadge">🔒 RPC Locked</span>
+            </div>
+        </div>
+
+        <!-- Connected Actions -->
+        <div class="actions-row hidden" id="actionsRow">
+            <div class="action-chip" onclick="switchNetwork()">
+                <span class="action-icon">⛓️</span>Switch Network
+            </div>
+            <div class="action-chip" id="lockChip" onclick="toggleLock()">
+                <span class="action-icon">🔒</span>Lock RPC
+            </div>
+            <div class="action-chip" onclick="copyAddress()">
+                <span class="action-icon">📋</span>Copy
+            </div>
+            <div class="action-chip" onclick="viewExplorer()">
+                <span class="action-icon">🔍</span>Explorer
+            </div>
+            <div class="action-chip" onclick="signMessage()">
+                <span class="action-icon">✍️</span>Sign
+            </div>
+        </div>
+
+        <!-- Buttons -->
+        <button class="btn btn-danger hidden" id="disconnectBtn" onclick="disconnectWallet()" style="margin-top:12px;">
+            🔌 Disconnect Wallet
+        </button>
+
+        <!-- Send Transaction -->
+        <div class="send-form hidden" id="sendForm">
+            <h4>💸 Send ETH</h4>
+            <input type="text" id="sendTo" placeholder="Recipient address (0x...)">
+            <input type="text" id="sendAmount" placeholder="Amount in ETH (e.g., 0.1)">
+            <button class="btn btn-primary" onclick="sendEth()" style="margin-top:4px;">🚀 Send Transaction</button>
+            <div class="tx-preview hidden" id="txPreview"></div>
+        </div>
+
+        <!-- Wallet List -->
+        <div class="section-title" style="margin-top:24px;">Connect Wallet</div>
+        <div class="recent-wallets hidden" id="recentWallets"></div>
+
+        <div class="wallet-grid">
+            <button class="wallet-btn" onclick="connectWallet('metamask')">
+                <div class="wallet-icon" style="background:#f5841f20;">🦊</div>
+                <div class="wallet-info">
+                    <div class="wallet-name">MetaMask</div>
+                    <div class="wallet-desc">Browser & Mobile</div>
+                </div>
+                <span class="wallet-tag tag-popular">#1</span>
+            </button>
+
+            <button class="wallet-btn" onclick="connectWallet('trustwallet')">
+                <div class="wallet-icon" style="background:#3375bb20;">🛡️</div>
+                <div class="wallet-info">
+                    <div class="wallet-name">Trust Wallet</div>
+                    <div class="wallet-desc">Mobile & Extension</div>
+                </div>
+                <span class="wallet-tag tag-popular">Top</span>
+            </button>
+
+            <button class="wallet-btn" onclick="connectWallet('coinbase')">
+                <div class="wallet-icon" style="background:#0052ff20;">🔵</div>
+                <div class="wallet-info">
+                    <div class="wallet-name">Coinbase</div>
+                    <div class="wallet-desc">Extension & Mobile</div>
+                </div>
+            </button>
+
+            <button class="wallet-btn" onclick="connectWallet('tokenpocket')">
+                <div class="wallet-icon" style="background:#2980b920;">🟢</div>
+                <div class="wallet-info">
+                    <div class="wallet-name">TokenPocket</div>
+                    <div class="wallet-desc">Multi-chain Mobile</div>
+                </div>
+                <span class="wallet-tag tag-mobile">Mobile</span>
+            </button>
+
+            <button class="wallet-btn" onclick="connectWallet('mathwallet')">
+                <div class="wallet-icon" style="background:#00000020;">🧮</div>
+                <div class="wallet-info">
+                    <div class="wallet-name">MathWallet</div>
+                    <div class="wallet-desc">Multi-chain</div>
+                </div>
+            </button>
+
+            <button class="wallet-btn" onclick="connectWallet('okx')">
+                <div class="wallet-icon" style="background:#00000020;">🅾️</div>
+                <div class="wallet-info">
+                    <div class="wallet-name">OKX Wallet</div>
+                    <div class="wallet-desc">Extension</div>
+                </div>
+            </button>
+
+            <button class="wallet-btn" onclick="connectWallet('binance')">
+                <div class="wallet-icon" style="background:#f0b90b20;">🟡</div>
+                <div class="wallet-info">
+                    <div class="wallet-name">Binance Wallet</div>
+                    <div class="wallet-desc">Extension</div>
+                </div>
+            </button>
+
+            <button class="wallet-btn" onclick="connectWallet('bitkeep')">
+                <div class="wallet-icon" style="background:#6c5ce720;">🔑</div>
+                <div class="wallet-info">
+                    <div class="wallet-name">BitKeep</div>
+                    <div class="wallet-desc">Multi-chain</div>
+                </div>
+                <span class="wallet-tag tag-mobile">Mobile</span>
+            </button>
+
+            <button class="wallet-btn" onclick="connectWallet('safepal')">
+                <div class="wallet-icon" style="background:#1e3a5f20;">🔒</div>
+                <div class="wallet-info">
+                    <div class="wallet-name">SafePal</div>
+                    <div class="wallet-desc">Hardware & App</div>
+                </div>
+            </button>
+
+            <button class="wallet-btn" onclick="connectWallet('rainbow')">
+                <div class="wallet-icon" style="background:#ff6b6b20;">🌈</div>
+                <div class="wallet-info">
+                    <div class="wallet-name">Rainbow</div>
+                    <div class="wallet-desc">Mobile Wallet</div>
+                </div>
+                <span class="wallet-tag tag-mobile">Mobile</span>
+            </button>
+
+            <button class="wallet-btn" onclick="connectWallet('phantom')">
+                <div class="wallet-icon" style="background:#ab9ff220;">👻</div>
+                <div class="wallet-info">
+                    <div class="wallet-name">Phantom</div>
+                    <div class="wallet-desc">EVM + Solana</div>
+                </div>
+                <span class="wallet-tag tag-new">New</span>
+            </button>
+
+            <button class="wallet-btn" onclick="connectWallet('walletconnect')" style="grid-column: 1 / -1;">
+                <div class="wallet-icon" style="background:#3b99fc20;">📱</div>
+                <div class="wallet-info">
+                    <div class="wallet-name">WalletConnect</div>
+                    <div class="wallet-desc">Universal QR — All mobile wallets</div>
+                </div>
+                <span class="wallet-tag tag-popular">Universal</span>
+            </button>
+        </div>
+
+        <!-- Advanced -->
+        <details>
+            <summary>⚙️ Advanced: Private Key Import (Testing Only)</summary>
+            <div style="margin-top:8px;">
+                <p style="font-size:10px;color:var(--red);margin-bottom:6px;">⚠️ Never use real private keys on websites!</p>
+                <div class="input-group">
+                    <input type="password" id="privateKeyInput" placeholder="0x... (test accounts only)">
+                    <button onclick="connectWithKey()">🔑 Import</button>
+                </div>
+            </div>
+        </details>
+
+        <!-- Footer -->
+        <div class="footer-note">
+            Anvil Wallet Connect Pro • RPC: https://anvil-render-q5wl.onrender.com • Chain ID: 1<br>
+            All wallets stay connected to Anvil RPC • Auto-reconnect on page load
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        // ============================================================
+        // CONFIGURATION
+        // ============================================================
+        const RPC_URL = 'https://anvil-render-q5wl.onrender.com';
+        const CHAIN_ID = '0x1'; // Ethereum mainnet chain ID (hex)
+        const CHAIN_ID_DEC = 1;
+
+        const ANVIL_CHAIN = {
+            chainId: CHAIN_ID,
+            chainName: 'Anvil Chain',
+            nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+            rpcUrls: ['https://anvil-render-q5wl.onrender.com'],
+            blockExplorerUrls: ['https://anvil-render-q5wl.onrender.com'],
+        };
+
+        // ============================================================
+        // STATE
+        // ============================================================
+        let currentProvider = null;
+        let currentAccount = null;
+        let isLocked = localStorage.getItem('anvil_rpc_locked') === 'true';
+        let chainListenerAttached = false;
+
+        // ============================================================
+        // TOAST SYSTEM
+        // ============================================================
+        function toast(msg, type = '') {
+            const container = document.getElementById('toastContainer');
+            const t = document.createElement('div');
+            t.className = 'toast ' + type;
+            t.textContent = msg;
+            container.appendChild(t);
+            setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3200);
+        }
+
+        // ============================================================
+        // UI UPDATES
+        // ============================================================
+        function updateUI(account = null) {
+            const statusCard = document.getElementById('statusCard');
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            const addressDisplay = document.getElementById('addressDisplay');
+            const balanceRow = document.getElementById('balanceRow');
+            const chainBadge = document.getElementById('chainBadge');
+            const lockBadge = document.getElementById('lockBadge');
+            const actionsRow = document.getElementById('actionsRow');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+            const sendForm = document.getElementById('sendForm');
+            const lockChip = document.getElementById('lockChip');
+            const ethBalance = document.getElementById('ethBalance');
+            const txCountEl = document.getElementById('txCount');
+
+            if (account) {
+                currentAccount = account;
+                statusCard.classList.remove('disconnected');
+                statusCard.classList.add('connected');
+                statusDot.classList.remove('off');
+                statusDot.classList.add('on');
+                statusText.textContent = 'Connected';
+                addressDisplay.textContent = account;
+                addressDisplay.classList.remove('hidden');
+                balanceRow.classList.remove('hidden');
+                chainBadge.classList.remove('hidden');
+                actionsRow.classList.remove('hidden');
+                disconnectBtn.classList.remove('hidden');
+                sendForm.classList.remove('hidden');
+
+                if (isLocked) {
+                    statusCard.classList.add('locked');
+                    statusDot.classList.add('locked');
+                    lockBadge.classList.remove('hidden');
+                    lockChip.classList.add('active');
+                    lockChip.querySelector('.action-icon').textContent = '🔓';
+                } else {
+                    statusCard.classList.remove('locked');
+                    statusDot.classList.remove('locked');
+                    lockBadge.classList.add('hidden');
+                    lockChip.classList.remove('active');
+                    lockChip.querySelector('.action-icon').textContent = '🔒';
+                }
+
+                saveRecentWallet(account);
+                fetchBalance(account);
+                fetchTxCount(account);
+            } else {
+                currentAccount = null;
+                statusCard.classList.add('disconnected');
+                statusCard.classList.remove('connected', 'locked');
+                statusDot.classList.remove('on', 'locked');
+                statusDot.classList.add('off');
+                statusText.textContent = 'Not Connected';
+                addressDisplay.classList.add('hidden');
+                balanceRow.classList.add('hidden');
+                chainBadge.classList.add('hidden');
+                lockBadge.classList.add('hidden');
+                actionsRow.classList.add('hidden');
+                disconnectBtn.classList.add('hidden');
+                sendForm.classList.add('hidden');
+                lockChip.classList.remove('active');
+                lockChip.querySelector('.action-icon').textContent = '🔒';
+                ethBalance.textContent = '—';
+                txCountEl.textContent = '—';
+            }
+        }
+
+        // ============================================================
+        // BLOCKCHAIN QUERIES
+        // ============================================================
+        async function fetchBalance(account) {
+            try {
+                const res = await fetch(RPC_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_getBalance', params: [account, 'latest'], id: 1 })
+                });
+                const data = await res.json();
+                const eth = (parseInt(data.result, 16) / 1e18).toFixed(4);
+                document.getElementById('ethBalance').textContent = eth + ' ETH';
+            } catch (e) {
+                document.getElementById('ethBalance').textContent = 'Error';
+            }
+        }
+
+        async function fetchTxCount(account) {
+            try {
+                const res = await fetch(RPC_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_getTransactionCount', params: [account, 'latest'], id: 1 })
+                });
+                const data = await res.json();
+                document.getElementById('txCount').textContent = parseInt(data.result, 16).toLocaleString();
+            } catch (e) {
+                document.getElementById('txCount').textContent = '—';
+            }
+        }
+
+        // ============================================================
+        // WALLET CONNECTION
+        // ============================================================
+        async function connectWallet(type) {
+            try {
+                let provider = detectProvider(type);
+                
+                if (!provider) {
+                    // Try deep link for mobile
+                    const mobileUrl = getMobileDeepLink(type);
+                    if (mobileUrl && /Mobi|Android/i.test(navigator.userAgent)) {
+                        window.location.href = mobileUrl;
+                        return;
+                    }
+                    provider = window.ethereum; // Fallback
+                    if (!provider) throw new Error('No Web3 wallet detected. Please install a wallet extension.');
+                }
+
+                currentProvider = provider;
+                const accounts = await provider.request({ method: 'eth_requestAccounts' });
+                if (!accounts || accounts.length === 0) throw new Error('No accounts found');
+
+                // Switch to Anvil chain
+                await switchToAnvilChain(provider);
+
+                // Update UI
+                updateUI(accounts[0]);
+                toast('✅ Connected to Anvil Chain!', 'success');
+
+                // Attach listeners
+                attachListeners(provider);
+
+            } catch (e) {
+                if (e.code === 4001) {
+                    toast('❌ Connection rejected by user', 'error');
+                } else {
+                    toast('❌ ' + (e.message || 'Connection failed'), 'error');
+                }
+                console.error('Wallet connection error:', e);
+            }
+        }
+
+        function detectProvider(type) {
+            const providers = {
+                metamask: () => window.ethereum?.isMetaMask ? window.ethereum : null,
+                trustwallet: () => window.ethereum?.isTrust || window.trustwallet || null,
+                coinbase: () => window.coinbaseWalletExtension || window.ethereum?.isCoinbaseWallet || null,
+                tokenpocket: () => window.ethereum?.isTokenPocket || window.tokenpocket || null,
+                mathwallet: () => window.ethereum?.isMathWallet || window.mathwallet || null,
+                okx: () => window.okxwallet || window.ethereum?.isOKXWallet || null,
+                binance: () => window.BinanceChain || window.ethereum?.isBinance || null,
+                bitkeep: () => window.bitkeep?.ethereum || window.ethereum?.isBitKeep || null,
+                safepal: () => window.safepal || window.ethereum?.isSafePal || null,
+                rainbow: () => window.ethereum?.isRainbow || null,
+                phantom: () => window.phantom?.ethereum || window.ethereum?.isPhantom || null,
+                walletconnect: () => window.ethereum || null,
+            };
+            return providers[type] ? providers[type]() : window.ethereum;
+        }
+
+        function getMobileDeepLink(type) {
+            const currentUrl = encodeURIComponent(window.location.href);
+            const links = {
+                metamask: 'https://metamask.app.link/dapp/' + window.location.host,
+                trustwallet: 'https://link.trustwallet.com/open_url?coin_id=60&url=' + currentUrl,
+                coinbase: 'https://go.cb-w.com/dapp?cb_url=' + currentUrl,
+                rainbow: 'https://rnbwapp.com/wc?uri=' + currentUrl,
+            };
+            return links[type] || null;
+        }
+
+        async function switchToAnvilChain(provider) {
+            try {
+                await provider.request({
+                    method: 'wallet_switchEthereumChain',
+                    params: [{ chainId: CHAIN_ID }]
+                });
+            } catch (switchError) {
+                if (switchError.code === 4902 || switchError.code === -32603) {
+                    await provider.request({
+                        method: 'wallet_addEthereumChain',
+                        params: [ANVIL_CHAIN]
+                    });
+                }
+            }
+        }
+
+        // ============================================================
+        // EVENT LISTENERS (Auto-reconnect & Lock)
+        // ============================================================
+        function attachListeners(provider) {
+            if (chainListenerAttached) return;
+            chainListenerAttached = true;
+
+            // Chain changed - force back to Anvil if locked
+            provider.on('chainChanged', async (newChainId) => {
+                document.getElementById('chainDisplay').textContent = 'Chain ' + parseInt(newChainId, 16);
+                
+                if (isLocked && newChainId !== CHAIN_ID) {
+                    toast('🔒 RPC Locked! Switching back to Anvil...', 'warning');
+                    setTimeout(() => switchToAnvilChain(provider), 500);
+                }
+                
+                if (currentAccount) {
+                    fetchBalance(currentAccount);
+                }
+            });
+
+            // Accounts changed
+            provider.on('accountsChanged', (accounts) => {
+                if (accounts.length === 0) {
+                    disconnectWallet();
+                } else {
+                    updateUI(accounts[0]);
+                    toast('👛 Account changed', '');
+                }
+            });
+
+            // Disconnect
+            provider.on('disconnect', () => {
+                disconnectWallet();
+                toast('🔌 Wallet disconnected', 'warning');
+            });
+        }
+
+        // ============================================================
+        // LOCK / UNLOCK RPC
+        // ============================================================
+        function toggleLock() {
+            isLocked = !isLocked;
+            localStorage.setItem('anvil_rpc_locked', isLocked.toString());
+            
+            if (isLocked) {
+                toast('🔒 RPC Locked! Wallet cannot switch networks', 'warning');
+                if (currentProvider) switchToAnvilChain(currentProvider);
+            } else {
+                toast('🔓 RPC Unlocked', 'success');
+            }
+            
+            updateUI(currentAccount);
+        }
+
+        // ============================================================
+        // DISCONNECT
+        // ============================================================
+        function disconnectWallet() {
+            currentProvider = null;
+            currentAccount = null;
+            chainListenerAttached = false;
+            updateUI(null);
+            toast('🔌 Disconnected', '');
+        }
+
+        // ============================================================
+        // ACTIONS
+        // ============================================================
+        async function switchNetwork() {
+            if (!currentProvider) return toast('❌ Not connected', 'error');
+            try {
+                await switchToAnvilChain(currentProvider);
+                toast('⛓ Switched to Anvil Chain', 'success');
+            } catch (e) {
+                toast('❌ Could not switch network', 'error');
+            }
+        }
+
+        function copyAddress() {
+            if (!currentAccount) return;
+            navigator.clipboard.writeText(currentAccount).then(() => {
+                toast('📋 Address copied!', 'success');
+            }).catch(() => toast('❌ Copy failed', 'error'));
+        }
+
+        function viewExplorer() {
+            window.open('about:blank', '_blank'); // Replace with your explorer URL
+            toast('🔍 Explorer opened', '');
+        }
+
+        async function signMessage() {
+            if (!currentProvider || !currentAccount) return toast('❌ Not connected', 'error');
+            try {
+                const msg = '0x' + Array.from('Anvil Connect - Sign ' + Date.now())
+                    .map(c => c.charCodeAt(0).toString(16)).join('');
+                const sig = await currentProvider.request({
+                    method: 'personal_sign',
+                    params: [msg, currentAccount]
+                });
+                toast('✍️ Signed: ' + sig.slice(0, 20) + '...', 'success');
+            } catch (e) {
+                if (e.code !== 4001) toast('❌ Signing failed', 'error');
+            }
+        }
+
+        // ============================================================
+        // SEND ETH
+        // ============================================================
+        async function sendEth() {
+            if (!currentProvider || !currentAccount) return toast('❌ Not connected', 'error');
+            
+            const to = document.getElementById('sendTo').value.trim();
+            const amount = document.getElementById('sendAmount').value.trim();
+            
+            if (!to || !to.startsWith('0x') || to.length !== 42) return toast('❌ Invalid address', 'error');
+            if (!amount || isNaN(amount) || parseFloat(amount) <= 0) return toast('❌ Invalid amount', 'error');
+            
+            const wei = '0x' + BigInt(Math.floor(parseFloat(amount) * 1e18)).toString(16);
+            
+            try {
+                const txHash = await currentProvider.request({
+                    method: 'eth_sendTransaction',
+                    params: [{
+                        from: currentAccount,
+                        to: to,
+                        value: wei,
+                    }]
+                });
+                
+                document.getElementById('txPreview').classList.remove('hidden');
+                document.getElementById('txPreview').textContent = '✅ TX Sent!\nHash: ' + txHash;
+                toast('🚀 Transaction sent!', 'success');
+                
+                // Refresh balance after 3 seconds
+                setTimeout(() => fetchBalance(currentAccount), 3000);
+            } catch (e) {
+                if (e.code !== 4001) {
+                    document.getElementById('txPreview').classList.remove('hidden');
+                    document.getElementById('txPreview').textContent = '❌ Error: ' + e.message;
+                    toast('❌ Transaction failed', 'error');
+                }
+            }
+        }
+
+        // ============================================================
+        // PRIVATE KEY IMPORT
+        // ============================================================
+        async function connectWithKey() {
+            const pk = document.getElementById('privateKeyInput').value.trim();
+            if (!pk) return toast('❌ Enter a private key', 'error');
+            if (!pk.startsWith('0x')) return toast('❌ Must start with 0x', 'error');
+            
+            if (window.ethereum) {
+                try {
+                    await window.ethereum.request({
+                        method: 'wallet_importRawKey',
+                        params: [pk, '']
+                    });
+                    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    currentProvider = window.ethereum;
+                    await switchToAnvilChain(currentProvider);
+                    updateUI(accounts[0]);
+                    attachListeners(currentProvider);
+                    toast('✅ Key imported (testing only!)', 'success');
+                } catch (e) {
+                    toast('❌ Import failed: ' + e.message, 'error');
+                }
+            } else {
+                toast('❌ No wallet extension found', 'error');
+            }
+        }
+
+        // ============================================================
+        // RECENT WALLETS
+        // ============================================================
+        function saveRecentWallet(addr) {
+            let recents = JSON.parse(localStorage.getItem('anvil_recent_wallets') || '[]');
+            recents = recents.filter(a => a !== addr);
+            recents.unshift(addr);
+            if (recents.length > 3) recents.pop();
+            localStorage.setItem('anvil_recent_wallets', JSON.stringify(recents));
+            renderRecentWallets();
+        }
+
+        function renderRecentWallets() {
+            const container = document.getElementById('recentWallets');
+            const recents = JSON.parse(localStorage.getItem('anvil_recent_wallets') || '[]');
+            if (recents.length === 0) { container.classList.add('hidden'); return; }
+            container.classList.remove('hidden');
+            container.innerHTML = '<span style="font-size:10px;color:var(--text-secondary);margin-right:6px;">Recent:</span>' +
+                recents.map(a => `<span class="recent-chip" onclick="document.getElementById('searchInput')?document.getElementById('searchInput').value='${a}':null;"><span class="rc-dot"></span>${a.slice(0,6)}...${a.slice(-4)}</span>`).join('');
+        }
+
+        // ============================================================
+        // AUTO-RECONNECT ON PAGE LOAD
+        // ============================================================
+        async function autoReconnect() {
+            renderRecentWallets();
+
+            if (!window.ethereum) return;
+
+            try {
+                // Check if already connected
+                const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                
+                if (accounts && accounts.length > 0) {
+                    currentProvider = window.ethereum;
+                    
+                    // Ensure on Anvil chain
+                    await switchToAnvilChain(currentProvider);
+                    
+                    updateUI(accounts[0]);
+                    attachListeners(currentProvider);
+                    
+                    if (isLocked) {
+                        toast('🔒 Auto-reconnected — RPC is locked to Anvil', 'warning');
+                    }
+                }
+            } catch (e) {
+                // Not connected — that's fine
+            }
+
+            // Always listen for chain changes
+            if (window.ethereum && !chainListenerAttached) {
+                window.ethereum.on('chainChanged', (newChainId) => {
+                    if (isLocked && newChainId !== CHAIN_ID && currentProvider) {
+                        toast('🔒 RPC Locked! Switching back...', 'warning');
+                        switchToAnvilChain(currentProvider);
+                    }
+                });
+            }
+        }
+
+        // ============================================================
+        // INIT
+        // ============================================================
+        document.getElementById('searchInput')?.addEventListener('keypress', e => {
+            if (e.key === 'Enter') doSearch?.();
+        });
+
+        // Run auto-reconnect
+        autoReconnect();
+    </script>
+</body>
+</html>
