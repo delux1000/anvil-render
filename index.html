@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EtherScan Pro - Blockchain Explorer</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='16' fill='%233b82f6'/><text x='16' y='22' text-anchor='middle' font-size='20' font-weight='bold' fill='white'>⟠</text></svg>">
     <style>
         :root {
             --bg: #060a13; --card: #0d1117; --border: #21262d;
@@ -195,7 +196,6 @@
         function timeAgo(ts) { const s = Math.floor(Date.now()/1000 - parseInt(ts,16)); if(s<5) return 'just now'; if(s<60) return s+'s ago'; if(s<3600) return Math.floor(s/60)+'m ago'; return Math.floor(s/3600)+'h ago'; }
         function hexNum(h) { return parseInt(h,16).toLocaleString(); }
         
-        // Decode method AND token transfer details
         function decodeMethod(data) {
             if (!data || data === '0x') return { name: 'Transfer', type: 'ETH' };
             const sig = data.slice(0,10);
@@ -210,7 +210,6 @@
             return methods[sig] || { name: sig.slice(0,8), type: 'Contract' };
         }
         
-        // Find token by contract address
         function findToken(addr) {
             if (!addr) return null;
             for (const [key, t] of Object.entries(TOKENS)) {
@@ -219,7 +218,6 @@
             return null;
         }
         
-        // Format token amount
         function fmtToken(amountHex, decimals) {
             const val = Number(BigInt(amountHex || '0x0')) / Math.pow(10, decimals);
             if (val > 1e9) return (val/1e9).toFixed(2) + 'B';
@@ -249,13 +247,10 @@
                 }
                 if (/^\d+$/.test(input)) return await searchBlock(parseInt(input));
                 if (input.length === 66 && input.startsWith('0x')) {
-                    // Try as transaction first
                     const tx = await rpc('eth_getTransactionByHash', [input]).catch(()=>null);
                     if (tx && tx.hash) return displayTx(input, tx);
-                    // Try as block hash
                     const block = await rpc('eth_getBlockByHash', [input, true]).catch(()=>null);
                     if (block && block.hash) return displayBlock(block);
-                    // Fallback to address
                     return displayAddress(input);
                 }
                 if (input.length === 42 && input.startsWith('0x')) return await displayAddress(input);
@@ -315,13 +310,11 @@
             const gasPrice = tx.gasPrice ? (parseInt(tx.gasPrice,16)/1e9).toFixed(2) : 'N/A';
             const gasUsed = receipt ? hexNum(receipt.gasUsed) : 'Pending';
             
-            // Detect token transfer
             const tokenTo = findToken(tx.to);
             let tokenTransferInfo = '';
             let mainValue = valEth + ' ETH';
             
             if (method.type === 'ERC20' && tx.input && tx.input.length >= 138) {
-                // Parse ERC20 transfer data
                 const sig = tx.input.slice(0,10);
                 if (sig === '0xa9059cbb' || sig === '0x23b872dd') {
                     let recipient, amountHex;
@@ -329,7 +322,6 @@
                         recipient = '0x' + tx.input.slice(34,74);
                         amountHex = '0x' + tx.input.slice(74,138);
                     } else {
-                        // TransferFrom
                         recipient = '0x' + tx.input.slice(98,138);
                         amountHex = '0x' + tx.input.slice(138);
                     }
@@ -356,7 +348,6 @@
                     </div>`;
             }
             
-            // Decode logs for token transfers
             let logsHTML = '';
             if (receipt && receipt.logs && receipt.logs.length > 0) {
                 logsHTML = '<h4 style="margin-top:14px;">📋 Event Logs</h4>';
@@ -417,7 +408,6 @@
                 tokenLabel = ` <span class="badge badge-contract">${t.icon} ${t.sym} Token</span>`;
             }
 
-            // ALL token balances
             let tokenBalancesHTML = '<h4 style="margin-top:16px;">🪙 Token Holdings</h4><div class="token-balances">';
             tokenBalancesHTML += `<div class="token-bal"><div class="tb-icon">⟠</div><div class="tb-info"><div class="tb-sym">ETH</div><div class="tb-name">Ethereum Native</div></div><div class="tb-amt">${Number(ethBalance).toLocaleString(undefined,{maximumFractionDigits:4})}</div></div>`;
             
@@ -441,7 +431,6 @@
             }
             tokenBalancesHTML += '</div>';
 
-            // Recent transactions with token detection
             let txHTML = '<h4 style="margin-top:16px;">💸 Recent Transactions</h4><div class="tx-list">';
             try {
                 const latestBlock = await rpc('eth_blockNumber');
@@ -456,7 +445,6 @@
                                 const method = decodeMethod(tx.input);
                                 const tokTo = findToken(tx.to);
                                 
-                                // Check for token transfer
                                 let valueDisplay = weiToEth(tx.value) + ' ETH';
                                 if (method.type === 'ERC20' && tx.input && tx.input.length >= 138) {
                                     const sig = tx.input.slice(0,10);
@@ -544,7 +532,6 @@
                     const tokTo = findToken(tx.to);
                     let valueDisplay = weiToEth(tx.value) + ' ETH';
                     
-                    // Check for token transfer in input data
                     if (method.type === 'ERC20' && tx.input && tx.input.length >= 138) {
                         const sig = tx.input.slice(0,10);
                         if (sig === '0xa9059cbb') {
@@ -599,6 +586,16 @@
                 await loadBlocks();
                 await loadTxTable();
             }, 10000);
+            
+            // Auto-search from URL parameters
+            if (window.location.search) {
+                const params = new URLSearchParams(window.location.search);
+                const searchVal = params.get('search') || params.get('q') || params.get('tx') || params.get('hash') || params.get('address') || params.get('block');
+                if (searchVal) {
+                    document.getElementById('searchInput').value = searchVal;
+                    setTimeout(() => doSearch(), 500);
+                }
+            }
         }
 
         init();
