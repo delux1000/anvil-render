@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EtherScan Pro - Blockchain Explorer</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='16' fill='%233b82f6'/><text x='16' y='22' text-anchor='middle' font-size='20' font-weight='bold' fill='white'>⟠</text></svg>">
     <style>
         :root {
             --bg: #060a13; --card: #0d1117; --border: #21262d;
@@ -84,10 +85,6 @@
             background: #1b1b3a; color: var(--purple);
         }
         
-        .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
-        .tab { padding: 8px 16px; border: none; background: none; color: var(--text2); cursor: pointer; font-weight: 600; font-size: 11px; border-bottom: 2px solid transparent; font-family: inherit; }
-        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-        
         .btn { padding: 8px 14px; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; font-size: 11px; font-family: inherit; }
         .btn-primary { background: var(--accent); color: #fff; }
         .btn-primary:hover { background: #2563eb; }
@@ -164,7 +161,13 @@
     </div>
 
     <script>
-        const RPC = 'https://anvil-render-q5wl.onrender.com';
+        // Use multiple CORS proxies in case one fails
+        const RPC_URLS = [
+            'https://anvil-render-q5wl.onrender.com',
+            'https://corsproxy.io/?url=' + encodeURIComponent('https://anvil-render-q5wl.onrender.com')
+        ];
+        
+        let currentRpcIndex = 0;
         
         const TOKENS = {
             USDT: { addr: '0xdAC17F958D2ee523a2206206994597C13D831ec7', sym: 'USDT', dec: 6, name: 'Tether USD', icon: '💵' },
@@ -178,24 +181,57 @@
             MATIC: { addr: '0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0', sym: 'MATIC', dec: 18, name: 'Polygon', icon: '🟣' },
         };
 
+        // Try multiple RPC URLs
         async function rpc(method, params = []) {
-            const res = await fetch(RPC, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ jsonrpc: '2.0', method, params, id: Date.now() })
-            });
-            const d = await res.json();
-            if (d.error) throw new Error(d.error.message);
-            return d.result;
+            let lastError;
+            
+            for (let i = 0; i < RPC_URLS.length; i++) {
+                try {
+                    const url = RPC_URLS[(currentRpcIndex + i) % RPC_URLS.length];
+                    
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), 15000);
+                    
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ jsonrpc: '2.0', method, params, id: Date.now() }),
+                        signal: controller.signal,
+                        mode: 'cors'
+                    });
+                    
+                    clearTimeout(timeout);
+                    
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    
+                    const d = await res.json();
+                    if (d.error) throw new Error(d.error.message);
+                    
+                    currentRpcIndex = (currentRpcIndex + i) % RPC_URLS.length;
+                    return d.result;
+                } catch (e) {
+                    lastError = e;
+                    console.warn(`RPC ${i} failed:`, e.message);
+                }
+            }
+            
+            throw new Error(`All RPC endpoints failed. Last error: ${lastError?.message || 'Unknown'}`);
         }
 
         function short(a) { return a ? a.slice(0,6)+'...'+a.slice(-4) : '—'; }
         function shortHash(h) { return h ? h.slice(0,8)+'...'+h.slice(-6) : '—'; }
-        function weiToEth(w) { return (Number(BigInt(w||'0x0')) / 1e18).toString(); }
-        function timeAgo(ts) { const s = Math.floor(Date.now()/1000 - parseInt(ts,16)); if(s<5) return 'just now'; if(s<60) return s+'s ago'; if(s<3600) return Math.floor(s/60)+'m ago'; return Math.floor(s/3600)+'h ago'; }
-        function hexNum(h) { return parseInt(h,16).toLocaleString(); }
+        function weiToEth(w) { 
+            try { return (Number(BigInt(w||'0x0')) / 1e18).toString(); } 
+            catch(e) { return '0'; }
+        }
+        function timeAgo(ts) { 
+            const s = Math.floor(Date.now()/1000 - parseInt(ts||'0x0',16)); 
+            if(s<5) return 'just now'; if(s<60) return s+'s ago'; 
+            if(s<3600) return Math.floor(s/60)+'m ago'; 
+            return Math.floor(s/3600)+'h ago'; 
+        }
+        function hexNum(h) { return parseInt(h||'0x0',16).toLocaleString(); }
         
-        // Decode method AND token transfer details
         function decodeMethod(data) {
             if (!data || data === '0x') return { name: 'Transfer', type: 'ETH' };
             const sig = data.slice(0,10);
@@ -204,13 +240,10 @@
                 '0x095ea7b3': { name: 'Approve', type: 'ERC20' }, 
                 '0x23b872dd': { name: 'TransferFrom', type: 'ERC20' }, 
                 '0x70a08231': { name: 'balanceOf', type: 'Read' },
-                '0x313ce567': { name: 'decimals', type: 'Read' },
-                '0x18160ddd': { name: 'totalSupply', type: 'Read' },
             };
             return methods[sig] || { name: sig.slice(0,8), type: 'Contract' };
         }
         
-        // Find token by contract address
         function findToken(addr) {
             if (!addr) return null;
             for (const [key, t] of Object.entries(TOKENS)) {
@@ -219,16 +252,19 @@
             return null;
         }
         
-        // Format token amount
         function fmtToken(amountHex, decimals) {
-            const val = Number(BigInt(amountHex || '0x0')) / Math.pow(10, decimals);
-            if (val > 1e9) return (val/1e9).toFixed(2) + 'B';
-            if (val > 1e6) return (val/1e6).toFixed(2) + 'M';
-            if (val > 1000) return val.toLocaleString(undefined, {maximumFractionDigits:2});
-            return val.toFixed(decimals <= 6 ? 2 : 6);
+            try {
+                const val = Number(BigInt(amountHex || '0x0')) / Math.pow(10, decimals);
+                if (val > 1e9) return (val/1e9).toFixed(2) + 'B';
+                if (val > 1e6) return (val/1e6).toFixed(2) + 'M';
+                if (val > 1000) return val.toLocaleString(undefined, {maximumFractionDigits:2});
+                return val.toFixed(decimals <= 6 ? 2 : 6);
+            } catch(e) { return '0'; }
         }
 
-        function copyText(t) { navigator.clipboard.writeText(t); }
+        function copyText(t) { 
+            navigator.clipboard.writeText(t).catch(() => {});
+        }
 
         function quickSearch(val) {
             document.getElementById('searchInput').value = val;
@@ -239,29 +275,46 @@
             const input = document.getElementById('searchInput').value.trim();
             if (!input) return;
             const card = document.getElementById('resultCard');
-            card.innerHTML = '<div class="loading"><div class="spinner"></div>Searching...</div>';
+            card.innerHTML = '<div class="loading"><div class="spinner"></div>Searching blockchain...</div>';
             card.classList.add('show');
+            card.scrollIntoView({ behavior: 'smooth' });
 
             try {
                 if (input === 'latest') {
-                    const block = await rpc('eth_getBlockByNumber', ['latest', true]);
-                    return displayBlock(block);
+                    try {
+                        const block = await rpc('eth_getBlockByNumber', ['latest', true]);
+                        return displayBlock(block);
+                    } catch(e) {
+                        card.innerHTML = `<div style="color:var(--red);text-align:center;padding:20px;">❌ Cannot connect to RPC<br><small>${e.message}</small></div>`;
+                        return;
+                    }
                 }
-                if (/^\d+$/.test(input)) return await searchBlock(parseInt(input));
+                
+                if (/^\d+$/.test(input)) {
+                    return await searchBlock(parseInt(input));
+                }
+                
                 if (input.length === 66 && input.startsWith('0x')) {
-                    // Try as transaction first
-                    const tx = await rpc('eth_getTransactionByHash', [input]).catch(()=>null);
-                    if (tx && tx.hash) return displayTx(input, tx);
+                    // Try as tx first
+                    try {
+                        const tx = await rpc('eth_getTransactionByHash', [input]);
+                        if (tx && tx.hash) return displayTx(input, tx);
+                    } catch(e) {}
+                    
                     // Try as block hash
-                    const block = await rpc('eth_getBlockByHash', [input, true]).catch(()=>null);
-                    if (block && block.hash) return displayBlock(block);
-                    // Fallback to address
-                    return displayAddress(input);
+                    try {
+                        const block = await rpc('eth_getBlockByHash', [input, true]);
+                        if (block && block.hash) return displayBlock(block);
+                    } catch(e) {}
                 }
-                if (input.length === 42 && input.startsWith('0x')) return await displayAddress(input);
-                card.innerHTML = '<div style="color:var(--red);text-align:center;padding:20px;">❌ Invalid input format</div>';
+                
+                if ((input.length === 42 || input.length === 66) && input.startsWith('0x')) {
+                    return await displayAddress(input);
+                }
+                
+                card.innerHTML = '<div style="color:var(--red);text-align:center;padding:20px;">❌ Invalid format<br><small>Enter address (0x...), tx hash, or block number</small></div>';
             } catch (e) {
-                card.innerHTML = `<div style="color:var(--red);text-align:center;padding:20px;">❌ ${e.message}</div>`;
+                card.innerHTML = `<div style="color:var(--red);text-align:center;padding:20px;">❌ Search failed<br><small>${e.message}</small></div>`;
             }
         }
 
@@ -282,7 +335,7 @@
                     const h = typeof tx === 'string' ? tx : tx.hash;
                     const method = typeof tx === 'object' ? decodeMethod(tx.input) : { name: 'Unknown', type: '?' };
                     const tokenTo = typeof tx === 'object' ? findToken(tx.to) : null;
-                    const label = tokenTo ? ` ${tokenTo.icon} ${tokenTo.sym}` : (method.type === 'ERC20' ? ' 🪙 Token' : '');
+                    const label = tokenTo ? ` ${tokenTo.icon} ${tokenTo.sym}` : '';
                     txList += `<div class="mono" style="padding:4px 0;cursor:pointer;" onclick="quickSearch('${h}')">#${i+1} ${shortHash(h)} <span class="method-badge">${method.name}</span>${label}</div>`;
                 });
             }
@@ -315,24 +368,15 @@
             const gasPrice = tx.gasPrice ? (parseInt(tx.gasPrice,16)/1e9).toFixed(2) : 'N/A';
             const gasUsed = receipt ? hexNum(receipt.gasUsed) : 'Pending';
             
-            // Detect token transfer
             const tokenTo = findToken(tx.to);
             let tokenTransferInfo = '';
             let mainValue = valEth + ' ETH';
             
             if (method.type === 'ERC20' && tx.input && tx.input.length >= 138) {
-                // Parse ERC20 transfer data
                 const sig = tx.input.slice(0,10);
-                if (sig === '0xa9059cbb' || sig === '0x23b872dd') {
-                    let recipient, amountHex;
-                    if (sig === '0xa9059cbb') {
-                        recipient = '0x' + tx.input.slice(34,74);
-                        amountHex = '0x' + tx.input.slice(74,138);
-                    } else {
-                        // TransferFrom
-                        recipient = '0x' + tx.input.slice(98,138);
-                        amountHex = '0x' + tx.input.slice(138);
-                    }
+                if (sig === '0xa9059cbb') {
+                    const recipient = '0x' + tx.input.slice(34,74);
+                    const amountHex = '0x' + tx.input.slice(74,138);
                     const token = tokenTo || { sym: 'TOKEN', dec: 18, icon: '🪙', name: 'Unknown Token' };
                     const amount = fmtToken(amountHex, token.dec);
                     tokenTransferInfo = `
@@ -340,8 +384,7 @@
                             <div class="rlabel">🪙 Token Transfer (${token.icon} ${token.sym})</div>
                             <div class="rvalue" style="font-size:14px;">
                                 <strong>Amount:</strong> <span style="color:var(--accent);font-weight:800;">${amount} ${token.sym}</span><br>
-                                <strong>To:</strong> <span class="mono" onclick="quickSearch('${recipient}')">${recipient}</span><br>
-                                <strong>Contract:</strong> <span class="mono" onclick="quickSearch('${tx.to}')">${tx.to}</span>
+                                <strong>To:</strong> <span class="mono" onclick="quickSearch('${recipient}')">${recipient}</span>
                             </div>
                         </div>`;
                     mainValue = '<span style="font-size:14px;">0 ETH</span> <span class="badge badge-token-tx">+ ' + amount + ' ' + token.sym + '</span>';
@@ -355,25 +398,6 @@
                         <div class="rvalue">Interacting with <span class="mono" onclick="quickSearch('${tx.to}')">${tokenTo.icon} ${tokenTo.sym} (${tokenTo.name})</span></div>
                     </div>`;
             }
-            
-            // Decode logs for token transfers
-            let logsHTML = '';
-            if (receipt && receipt.logs && receipt.logs.length > 0) {
-                logsHTML = '<h4 style="margin-top:14px;">📋 Event Logs</h4>';
-                receipt.logs.slice(0,8).forEach((log, i) => {
-                    const logToken = findToken(log.address);
-                    let logInfo = '';
-                    if (logToken && log.topics.length >= 3 && log.topics[0] === '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef') {
-                        const from = '0x' + log.topics[1].slice(26);
-                        const to = '0x' + log.topics[2].slice(26);
-                        const amount = fmtToken(log.data, logToken.dec);
-                        logInfo = `<br><span style="color:var(--green);">🪙 ${logToken.icon} ${amount} ${logToken.sym}</span> from <span class="mono" onclick="quickSearch('${from}')">${short(from)}</span> → <span class="mono" onclick="quickSearch('${to}')">${short(to)}</span>`;
-                    }
-                    logsHTML += `<div style="background:#0a0e17;border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px;font-size:10px;font-family:monospace;">
-                        Log #${i}: <span class="mono" onclick="quickSearch('${log.address}')">${logToken ? logToken.icon + ' ' + logToken.sym : short(log.address)}</span>${logInfo}
-                    </div>`;
-                });
-            }
 
             const card = document.getElementById('resultCard');
             card.innerHTML = `
@@ -384,14 +408,12 @@
                     <div class="result-item"><div class="rlabel">From</div><div class="rvalue mono" onclick="quickSearch('${tx.from}')">${tx.from}</div></div>
                     <div class="result-item"><div class="rlabel">To</div><div class="rvalue mono" onclick="quickSearch('${tx.to||''}')">${tx.to || '📜 Contract Creation'}</div></div>
                     <div class="result-item"><div class="rlabel">Value</div><div class="rvalue big">${mainValue}</div></div>
-                    <div class="result-item"><div class="rlabel">Method</div><div class="rvalue"><span class="method-badge">${method.name}</span> <span style="font-size:9px;color:var(--text2);">${method.type}</span></div></div>
+                    <div class="result-item"><div class="rlabel">Method</div><div class="rvalue"><span class="method-badge">${method.name}</span></div></div>
                     <div class="result-item"><div class="rlabel">Gas Price</div><div class="rvalue">${gasPrice} Gwei</div></div>
                     <div class="result-item"><div class="rlabel">Gas Used</div><div class="rvalue">${gasUsed}</div></div>
                     <div class="result-item"><div class="rlabel">Nonce</div><div class="rvalue">${hexNum(tx.nonce)}</div></div>
                     ${tokenTransferInfo || ''}
-                    <div class="result-item"><div class="rlabel">Input Data</div><div class="rvalue" style="font-size:9px;">${tx.input === '0x' ? 'None (ETH Transfer)' : tx.input.slice(0,80)+'...'}</div></div>
                 </div>
-                ${logsHTML}
             `;
             card.classList.add('show');
             card.scrollIntoView({ behavior: 'smooth' });
@@ -399,104 +421,102 @@
 
         async function displayAddress(addr) {
             const card = document.getElementById('resultCard');
-            card.innerHTML = '<div class="loading"><div class="spinner"></div>Loading address...</div>';
+            card.innerHTML = '<div class="loading"><div class="spinner"></div>Loading address data...</div>';
             card.classList.add('show');
+            card.scrollIntoView({ behavior: 'smooth' });
 
-            const [balance, txCount, code] = await Promise.all([
-                rpc('eth_getBalance', [addr, 'latest']).catch(()=>'0x0'),
-                rpc('eth_getTransactionCount', [addr, 'latest']).catch(()=>'0x0'),
-                rpc('eth_getCode', [addr, 'latest']).catch(()=>'0x'),
-            ]);
-            const isContract = code && code !== '0x';
-            const ethBalance = weiToEth(balance);
-
-            const tokenInfo = Object.entries(TOKENS).find(([k,t]) => t.addr.toLowerCase() === addr.toLowerCase());
-            let tokenLabel = '';
-            if (tokenInfo) {
-                const [key, t] = tokenInfo;
-                tokenLabel = ` <span class="badge badge-contract">${t.icon} ${t.sym} Token</span>`;
-            }
-
-            // ALL token balances
-            let tokenBalancesHTML = '<h4 style="margin-top:16px;">🪙 Token Holdings</h4><div class="token-balances">';
-            tokenBalancesHTML += `<div class="token-bal"><div class="tb-icon">⟠</div><div class="tb-info"><div class="tb-sym">ETH</div><div class="tb-name">Ethereum Native</div></div><div class="tb-amt">${Number(ethBalance).toLocaleString(undefined,{maximumFractionDigits:4})}</div></div>`;
-            
-            for (const [key, t] of Object.entries(TOKENS)) {
-                try {
-                    const data = '0x70a08231000000000000000000000000' + addr.slice(2);
-                    const bal = await rpc('eth_call', [{ to: t.addr, data }, 'latest']);
-                    const human = Number(BigInt(bal)) / Math.pow(10, t.dec);
-                    tokenBalancesHTML += `<div class="token-bal">
-                        <div class="tb-icon">${t.icon}</div>
-                        <div class="tb-info"><div class="tb-sym">${t.sym}</div><div class="tb-name">${t.name}</div></div>
-                        <div class="tb-amt">${human > 0 ? human.toLocaleString(undefined,{maximumFractionDigits:2}) : '0'}</div>
-                    </div>`;
-                } catch(e) {
-                    tokenBalancesHTML += `<div class="token-bal">
-                        <div class="tb-icon">${t.icon}</div>
-                        <div class="tb-info"><div class="tb-sym">${t.sym}</div><div class="tb-name">${t.name}</div></div>
-                        <div class="tb-amt">—</div>
-                    </div>`;
-                }
-            }
-            tokenBalancesHTML += '</div>';
-
-            // Recent transactions with token detection
-            let txHTML = '<h4 style="margin-top:16px;">💸 Recent Transactions</h4><div class="tx-list">';
             try {
-                const latestBlock = await rpc('eth_blockNumber');
-                const latest = parseInt(latestBlock, 16);
-                let found = 0;
-                for (let i = 0; i < 15 && found < 10; i++) {
-                    const block = await rpc('eth_getBlockByNumber', ['0x'+(latest-i).toString(16), true]);
-                    if (block?.transactions) {
-                        for (const tx of block.transactions) {
-                            if ((tx.from?.toLowerCase() === addr.toLowerCase() || tx.to?.toLowerCase() === addr.toLowerCase()) && found < 10) {
-                                const isOut = tx.from?.toLowerCase() === addr.toLowerCase();
-                                const method = decodeMethod(tx.input);
-                                const tokTo = findToken(tx.to);
-                                
-                                // Check for token transfer
-                                let valueDisplay = weiToEth(tx.value) + ' ETH';
-                                if (method.type === 'ERC20' && tx.input && tx.input.length >= 138) {
-                                    const sig = tx.input.slice(0,10);
-                                    if (sig === '0xa9059cbb') {
-                                        const amountHex = '0x' + tx.input.slice(74,138);
-                                        const token = tokTo || { sym: 'TOKEN', dec: 18, icon: '🪙' };
-                                        const amount = fmtToken(amountHex, token.dec);
-                                        valueDisplay = `<span style="color:var(--purple);">${amount} ${token.sym}</span>`;
+                const [balance, txCount, code] = await Promise.all([
+                    rpc('eth_getBalance', [addr, 'latest']).catch(()=>'0x0'),
+                    rpc('eth_getTransactionCount', [addr, 'latest']).catch(()=>'0x0'),
+                    rpc('eth_getCode', [addr, 'latest']).catch(()=>'0x'),
+                ]);
+                
+                const isContract = code && code !== '0x';
+                const ethBalance = weiToEth(balance);
+
+                const tokenInfo = Object.entries(TOKENS).find(([k,t]) => t.addr.toLowerCase() === addr.toLowerCase());
+                let tokenLabel = '';
+                if (tokenInfo) {
+                    tokenLabel = ` <span class="badge badge-contract">${tokenInfo[1].icon} ${tokenInfo[1].sym} Token</span>`;
+                }
+
+                let tokenBalancesHTML = '<h4 style="margin-top:16px;">🪙 Token Holdings</h4><div class="token-balances">';
+                tokenBalancesHTML += `<div class="token-bal"><div class="tb-icon">⟠</div><div class="tb-info"><div class="tb-sym">ETH</div><div class="tb-name">Ethereum Native</div></div><div class="tb-amt">${Number(ethBalance).toLocaleString(undefined,{maximumFractionDigits:4})}</div></div>`;
+                
+                for (const [key, t] of Object.entries(TOKENS)) {
+                    try {
+                        const data = '0x70a08231000000000000000000000000' + addr.slice(2);
+                        const bal = await rpc('eth_call', [{ to: t.addr, data }, 'latest']);
+                        const human = Number(BigInt(bal)) / Math.pow(10, t.dec);
+                        tokenBalancesHTML += `<div class="token-bal">
+                            <div class="tb-icon">${t.icon}</div>
+                            <div class="tb-info"><div class="tb-sym">${t.sym}</div><div class="tb-name">${t.name}</div></div>
+                            <div class="tb-amt">${human > 0 ? human.toLocaleString(undefined,{maximumFractionDigits:2}) : '0'}</div>
+                        </div>`;
+                    } catch(e) {}
+                }
+                tokenBalancesHTML += '</div>';
+
+                // Recent transactions
+                let txHTML = '<h4 style="margin-top:16px;">💸 Recent Transactions</h4><div class="tx-list">';
+                try {
+                    const latestBlock = await rpc('eth_blockNumber');
+                    const latest = parseInt(latestBlock, 16);
+                    let found = 0;
+                    for (let i = 0; i < 20 && found < 10; i++) {
+                        const block = await rpc('eth_getBlockByNumber', ['0x'+(latest-i).toString(16), true]);
+                        if (block?.transactions) {
+                            for (const tx of block.transactions) {
+                                if ((tx.from?.toLowerCase() === addr.toLowerCase() || tx.to?.toLowerCase() === addr.toLowerCase()) && found < 10) {
+                                    const isOut = tx.from?.toLowerCase() === addr.toLowerCase();
+                                    const method = decodeMethod(tx.input);
+                                    const tokTo = findToken(tx.to);
+                                    
+                                    let valueDisplay = weiToEth(tx.value) + ' ETH';
+                                    if (method.type === 'ERC20' && tx.input && tx.input.length >= 138) {
+                                        const sig = tx.input.slice(0,10);
+                                        if (sig === '0xa9059cbb') {
+                                            const amountHex = '0x' + tx.input.slice(74,138);
+                                            const token = tokTo || { sym: 'TOKEN', dec: 18, icon: '🪙' };
+                                            const amount = fmtToken(amountHex, token.dec);
+                                            valueDisplay = `<span style="color:var(--purple);">${amount} ${token.sym}</span>`;
+                                        }
                                     }
+                                    
+                                    txHTML += `<div style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--border);font-size:11px;">
+                                        <span class="badge ${isOut?'badge-out':'badge-in'}">${isOut?'OUT':'IN'}</span>
+                                        <span class="mono" onclick="quickSearch('${tx.hash}')">${shortHash(tx.hash)}</span>
+                                        <span class="method-badge">${method.name}</span>
+                                        <span>${valueDisplay}</span>
+                                        <span class="mono2">${timeAgo(block.timestamp)}</span>
+                                    </div>`;
+                                    found++;
                                 }
-                                
-                                txHTML += `<div style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--border);font-size:11px;">
-                                    <span class="badge ${isOut?'badge-out':'badge-in'}">${isOut?'OUT':'IN'}</span>
-                                    <span class="mono" onclick="quickSearch('${tx.hash}')">${shortHash(tx.hash)}</span>
-                                    <span class="method-badge">${method.name}</span>
-                                    <span>${valueDisplay}</span>
-                                    <span class="mono2">${timeAgo(block.timestamp)}</span>
-                                </div>`;
-                                found++;
                             }
                         }
                     }
+                    if (found === 0) txHTML += '<div style="color:var(--text2);padding:10px;">No transactions found in recent blocks</div>';
+                } catch(e) {
+                    txHTML += '<div style="color:var(--text2);padding:10px;">Could not load transactions</div>';
                 }
-            } catch(e) {}
-            txHTML += found === 0 ? '<div style="color:var(--text2);padding:10px;">No transactions found</div>' : '';
-            txHTML += '</div>';
+                txHTML += '</div>';
 
-            card.innerHTML = `
-                <h3>👛 ${isContract ? '📜 Contract' : 'Address'} ${tokenLabel}</h3>
-                <div class="result-grid">
-                    <div class="result-item full"><div class="rlabel">Address</div><div class="rvalue">${addr} <button class="copy-btn" onclick="copyText('${addr}')">📋</button></div></div>
-                    <div class="result-item"><div class="rlabel">ETH Balance</div><div class="rvalue big">${ethBalance} ETH</div></div>
-                    <div class="result-item"><div class="rlabel">Transactions</div><div class="rvalue big" style="color:var(--purple);">${hexNum(txCount)}</div></div>
-                    <div class="result-item"><div class="rlabel">Type</div><div class="rvalue">${isContract ? 'Smart Contract' : 'Wallet (EOA)'}</div></div>
-                </div>
-                ${tokenBalancesHTML}
-                ${txHTML}
-            `;
+                card.innerHTML = `
+                    <h3>👛 ${isContract ? '📜 Contract' : 'Address'} ${tokenLabel}</h3>
+                    <div class="result-grid">
+                        <div class="result-item full"><div class="rlabel">Address</div><div class="rvalue">${addr} <button class="copy-btn" onclick="copyText('${addr}')">📋</button></div></div>
+                        <div class="result-item"><div class="rlabel">ETH Balance</div><div class="rvalue big">${Number(ethBalance).toFixed(6)} ETH</div></div>
+                        <div class="result-item"><div class="rlabel">Transactions</div><div class="rvalue big" style="color:var(--purple);">${hexNum(txCount)}</div></div>
+                        <div class="result-item"><div class="rlabel">Type</div><div class="rvalue">${isContract ? 'Smart Contract' : 'Wallet (EOA)'}</div></div>
+                    </div>
+                    ${tokenBalancesHTML}
+                    ${txHTML}
+                `;
+            } catch(e) {
+                card.innerHTML = `<div style="color:var(--red);text-align:center;padding:20px;">❌ Error loading address<br><small>${e.message}</small></div>`;
+            }
             card.classList.add('show');
-            card.scrollIntoView({ behavior: 'smooth' });
         }
 
         async function loadBlocks() {
@@ -507,20 +527,22 @@
                 for (let i = 0; i < 8; i++) {
                     const num = latestNum - i;
                     if (num < 0) break;
-                    const block = await rpc('eth_getBlockByNumber', ['0x'+num.toString(16), false]);
-                    const txCount = Array.isArray(block.transactions) ? block.transactions.length : 0;
-                    html += `<tr>
-                        <td><span class="mono" onclick="quickSearch('${num}')">#${num.toLocaleString()}</span></td>
-                        <td>${timeAgo(block.timestamp)}</td>
-                        <td class="mono2">${short(block.miner)}</td>
-                        <td><span class="badge ${txCount>0?'badge-success':'badge-pending'}">${txCount} txns</span></td>
-                        <td>${hexNum(block.gasUsed)}</td>
-                        <td>${hexNum(block.gasLimit)}</td>
-                    </tr>`;
+                    try {
+                        const block = await rpc('eth_getBlockByNumber', ['0x'+num.toString(16), false]);
+                        const txCount = Array.isArray(block.transactions) ? block.transactions.length : 0;
+                        html += `<tr>
+                            <td><span class="mono" onclick="quickSearch('${num}')">#${num.toLocaleString()}</span></td>
+                            <td>${timeAgo(block.timestamp)}</td>
+                            <td class="mono2">${short(block.miner)}</td>
+                            <td><span class="badge ${txCount>0?'badge-success':'badge-pending'}">${txCount} txns</span></td>
+                            <td>${hexNum(block.gasUsed)}</td>
+                            <td>${hexNum(block.gasLimit)}</td>
+                        </tr>`;
+                    } catch(e) {}
                 }
-                document.getElementById('blocksTable').innerHTML = html;
+                document.getElementById('blocksTable').innerHTML = html || '<tr><td colspan="6">No blocks loaded</td></tr>';
             } catch(e) {
-                document.getElementById('blocksTable').innerHTML = '<tr><td colspan="6">Failed to load blocks</td></tr>';
+                document.getElementById('blocksTable').innerHTML = '<tr><td colspan="6" style="color:var(--red);">RPC Connection Error</td></tr>';
             }
         }
 
@@ -530,13 +552,15 @@
                 const latestNum = parseInt(latest, 16);
                 let txs = [];
                 for (let i = 0; i < 5 && txs.length < 8; i++) {
-                    const block = await rpc('eth_getBlockByNumber', ['0x'+(latestNum-i).toString(16), true]);
-                    if (block?.transactions) {
-                        for (const tx of block.transactions) {
-                            if (txs.length >= 8) break;
-                            txs.push({...tx, blockNum: latestNum-i});
+                    try {
+                        const block = await rpc('eth_getBlockByNumber', ['0x'+(latestNum-i).toString(16), true]);
+                        if (block?.transactions) {
+                            for (const tx of block.transactions) {
+                                if (txs.length >= 8) break;
+                                txs.push({...tx, blockNum: latestNum-i});
+                            }
                         }
-                    }
+                    } catch(e) {}
                 }
                 let html = '';
                 txs.forEach(tx => {
@@ -544,7 +568,6 @@
                     const tokTo = findToken(tx.to);
                     let valueDisplay = weiToEth(tx.value) + ' ETH';
                     
-                    // Check for token transfer in input data
                     if (method.type === 'ERC20' && tx.input && tx.input.length >= 138) {
                         const sig = tx.input.slice(0,10);
                         if (sig === '0xa9059cbb') {
@@ -568,7 +591,7 @@
                 });
                 document.getElementById('txTable').innerHTML = html || '<tr><td colspan="7">No transactions yet</td></tr>';
             } catch(e) {
-                document.getElementById('txTable').innerHTML = '<tr><td colspan="7">Failed to load transactions</td></tr>';
+                document.getElementById('txTable').innerHTML = '<tr><td colspan="7" style="color:var(--red);">Failed to load transactions</td></tr>';
             }
         }
 
@@ -587,6 +610,7 @@
                 document.getElementById('sStatus').textContent = '❌ Offline';
                 document.getElementById('statusDot').className = 'dot off';
                 document.getElementById('statusText').textContent = 'Offline';
+                console.error('RPC Status Error:', e.message);
             }
         }
 
@@ -599,9 +623,22 @@
                 await loadBlocks();
                 await loadTxTable();
             }, 10000);
+            
+            // Auto-search from URL parameters
+            if (window.location.search) {
+                const params = new URLSearchParams(window.location.search);
+                const searchVal = params.get('search') || params.get('q') || params.get('tx') || params.get('hash') || params.get('address') || params.get('block');
+                if (searchVal) {
+                    document.getElementById('searchInput').value = searchVal;
+                    setTimeout(() => doSearch(), 800);
+                }
+            }
         }
 
         init();
+        console.log('🔍 Etherscan ERC20 Explorer Ready');
+        console.log('📡 RPC URLs:', RPC_URLS);
+        console.log('🪙 Tokens:', Object.keys(TOKENS).length);
     </script>
 </body>
-</html> 
+</html>
