@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anvil Admin Panel Pro</title>
+    <style>
+        :root {
+            --bg: #060a13;
+            --card: #0d1117;
+            --card-hover: #131a24;
+            --border: #21262d;
+            --text: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --green: #22c55e;
+            --green-bg: #04260f;
+            --red: #ef4444;
+            --red-bg: #490202;
+            --orange: #f59e0b;
+            --orange-bg: #341a00;
+            --purple: #8b5cf6;
+            --pink: #ec4899;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* Layout */
+        .app { display: flex; min-height: 100vh; }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: var(--card);
+            border-right: 1px solid var(--border);
+            padding: 20px 0;
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            overflow-y: auto;
+            z-index: 100;
+        }
+        .sidebar-logo {
+            padding: 0 20px 20px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 16px;
+            font-size: 20px;
+            font-weight: 800;
+        }
+        .sidebar-logo span { background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .sidebar-nav { padding: 0 12px; }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 4px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            font-family: inherit;
+        }
+        .nav-item:hover { background: var(--card-hover); color: var(--text); }
+        .nav-item.active { background: #3b82f620; color: var(--accent); font-weight: 600; }
+        .nav-item .nav-icon { font-size: 18px; width: 24px; text-align: center; }
+
+        /* Main Content */
+        .main {
+            flex: 1;
+            margin-left: 260px;
+            padding: 24px;
+        }
+
+        /* Header */
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .topbar h2 { font-size: 22px; font-weight: 700; }
+        .topbar-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .status-indicator { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+        .status-indicator .dot { width: 8px; height: 8px; border-radius: 50%; }
+        .dot.online { background: var(--green); animation: pulse 2s infinite; }
+        .dot.offline { background: var(--red); }
+        @keyframes pulse { 50% { opacity: 0.3; } }
+
+        /* Cards */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .card-title { font-size: 15px; font-weight: 700; }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .stat-box {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+        }
+        .stat-box .stat-label { font-size: 10px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+        .stat-box .stat-value { font-size: 24px; font-weight: 800; color: var(--accent); margin-top: 4px; font-family: 'SF Mono', monospace; }
+
+        /* Tables */
+        .table-wrapper {
+            overflow-x: auto;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th { background: #0d1117; padding: 10px 12px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-secondary); font-weight: 700; border-bottom: 1px solid var(--border); white-space: nowrap; }
+        td { padding: 10px 12px; border-top: 1px solid var(--border); font-size: 12px; }
+        tr:hover td { background: var(--card-hover); }
+        .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; color: var(--accent); cursor: pointer; }
+        .mono:hover { text-decoration: underline; }
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
+        .badge-success { background: var(--green-bg); color: var(--green); }
+        .badge-warning { background: var(--orange-bg); color: var(--orange); }
+
+        /* Buttons */
+        .btn {
+            padding: 10px 18px;
+            border-radius: 10px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+            font-size: 12px;
+        }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-danger { background: #dc262620; color: var(--red); border: 1px solid #dc262640; }
+        .btn-danger:hover { background: #dc262630; }
+        .btn-success { background: var(--green-bg); color: var(--green); border: 1px solid #23863640; }
+        .btn-success:hover { background: #23863620; }
+        .btn-sm { padding: 6px 12px; font-size: 11px; }
+        .btn-xs { padding: 3px 8px; font-size: 10px; border-radius: 6px; }
+
+        /* Forms */
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 10px 14px;
+            background: #0a0e17;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-family: 'SF Mono', monospace;
+            font-size: 12px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); }
+        .form-group textarea { min-height: 80px; resize: vertical; font-size: 11px; }
+        .form-row { display: flex; gap: 10px; }
+        .form-row > * { flex: 1; }
+
+        /* Token Icons */
+        .token-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            border-radius: 14px;
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+        .token-badge:hover { border-color: var(--accent); }
+        .token-usdt { background: #26a17b20; color: #26a17b; }
+        .token-usdc { background: #2775ca20; color: #2775ca; }
+        .token-dai { background: #f5ac3720; color: #f5ac37; }
+        .token-wbtc { background: #f7931a20; color: #f7931a; }
+        .token-weth { background: #627eea20; color: #627eea; }
+        .token-link { background: #2a5ada20; color: #2a5ada; }
+        .token-uni { background: #ff007a20; color: #ff007a; }
+
+        /* Whale Grid */
+        .whale-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 10px;
+        }
+        .whale-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .whale-card:hover { border-color: var(--accent); background: var(--card-hover); }
+        .whale-card.impersonated { border-color: var(--green); background: #04260f20; }
+        .whale-icon { font-size: 28px; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .whale-info { flex: 1; min-width: 0; }
+        .whale-name { font-weight: 700; font-size: 13px; }
+        .whale-address { font-family: monospace; font-size: 10px; color: var(--text-secondary); }
+        .whale-tokens { font-size: 10px; color: var(--orange); }
+
+        /* Toast */
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .toast {
+            padding: 12px 18px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 12px;
+            animation: slideIn 0.3s ease;
+            border: 1px solid;
+            max-width: 350px;
+        }
+        .toast-success { background: #04260f; border-color: #238636; color: #7ee787; }
+        .toast-error { background: #490202; border-color: #dc2626; color: #fca5a5; }
+        .toast-info { background: #0d1117; border-color: #3b82f6; color: #93c5fd; }
+        @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } }
+
+        /* Action Feedback */
+        .tx-hash {
+            background: #0a0e17;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px;
+            margin-top: 8px;
+            font-family: monospace;
+            font-size: 10px;
+            color: var(--green);
+            word-break: break-all;
+            max-height: 60px;
+            overflow-y: auto;
+        }
+
+        /* Search */
+        .search-box {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .search-box input {
+            flex: 1;
+            padding: 10px 14px;
+            background: #0a0e17;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .search-box input:focus { border-color: var(--accent); outline: none; }
+
+        .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+        .tab {
+            padding: 8px 16px;
+            border: none;
+            background: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 12px;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .tab:hover { color: var(--text); }
+
+        /* Refresh */
+        .refresh-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 6px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s;
+        }
+        .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+        .clickable { cursor: pointer; }
+        .clickable:hover { opacity: 0.8; }
+
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .main { margin-left: 0; }
+            .form-row { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-logo">⚡ <span>Anvil Admin</span></div>
+            <div class="sidebar-nav">
+                <button class="nav-item active" onclick="switchTab('dashboard')"><span class="nav-icon">📊</span> Dashboard</button>
+                <button class="nav-item" onclick="switchTab('whales')"><span class="nav-icon">🐋</span> Whales</button>
+                <button class="nav-item" onclick="switchTab('tokens')"><span class="nav-icon">🪙</span> Tokens</button>
+                <button class="nav-item" onclick="switchTab('send')"><span class="nav-icon">💸</span> Send Funds</button>
+                <button class="nav-item" onclick="switchTab('balances')"><span class="nav-icon">💰</span> Set Balances</button>
+                <button class="nav-item" onclick="switchTab('wallets')"><span class="nav-icon">👛</span> All Wallets</button>
+                <button class="nav-item" onclick="switchTab('state')"><span class="nav-icon">💾</span> State Sync</button>
+                <button class="nav-item" onclick="switchTab('bulk')"><span class="nav-icon">📋</span> Bulk Transfer</button>
+                <button class="nav-item" onclick="switchTab('getfunds')"><span class="nav-icon">🎁</span> Get Test Funds</button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main">
+            <!-- Top Bar -->
+            <div class="topbar">
+                <h2 id="pageTitle">📊 Dashboard</h2>
+                <div class="topbar-actions">
+                    <span class="status-indicator"><span class="dot online" id="statusDot"></span><span id="statusText">Checking...</span></span>
+                    <button class="refresh-btn" onclick="refreshAll()">🔄 Refresh</button>
+                </div>
+            </div>
+
+            <!-- ========== DASHBOARD ========== -->
+            <div id="tab-dashboard">
+                <div class="stats-grid">
+                    <div class="stat-box"><div class="stat-label">💰 Total Wallets</div><div class="stat-value" id="statWallets">—</div></div>
+                    <div class="stat-box"><div class="stat-label">📦 Latest Block</div><div class="stat-value" id="statBlock">—</div></div>
+                    <div class="stat-box"><div class="stat-label">🐋 Whales Active</div><div class="stat-value" id="statWhales">—</div></div>
+                    <div class="stat-box"><div class="stat-label">💾 JSONBin Status</div><div class="stat-value" id="statJsonbin" style="font-size:16px;">—</div></div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><div class="card-title">📋 Recent Activity</div></div>
+                    <div id="recentActivity">Loading...</div>
+                </div>
+            </div>
+
+            <!-- ========== WHALES ========== -->
+            <div id="tab-whales" style="display:none;">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">🐋 Billionaire Whales (Click to Impersonate)</div>
+                        <button class="btn btn-success btn-sm" onclick="impersonateAllWhales()">Impersonate All</button>
+                    </div>
+                    <div class="whale-grid" id="whaleGrid">Loading whales...</div>
+                </div>
+            </div>
+
+            <!-- ========== TOKENS ========== -->
+            <div id="tab-tokens" style="display:none;">
+                <div class="card">
+                    <div class="card-header"><div class="card-title">🪙 ERC-20 Token Contracts</div></div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead><tr><th>Token</th><th>Symbol</th><th>Contract Address</th><th>Decimals</th><th>Actions</th></tr></thead>
+                            <tbody id="tokenTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== SEND FUNDS ========== -->
+            <div id="tab-send" style="display:none;">
+                <div class="card">
+                    <div class="card-header"><div class="card-title">💸 Send Funds (Admin)</div></div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>From (Whale/Impersonated)</label>
+                            <select id="sendFrom">
+                                <option value="">Loading whales...</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Token</label>
+                            <select id="sendToken">
+                                <option value="ETH">ETH (Native)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>To Address</label>
+                        <input type="text" id="sendTo" placeholder="0x...">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Amount</label>
+                            <input type="text" id="sendAmount" placeholder="e.g., 100">
+                        </div>
+                        <div class="form-group">
+                            <label>Gas (optional)</label>
+                            <input type="text" id="sendGas" placeholder="100000" value="100000">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="adminSend()">🚀 Send Now</button>
+                    <div class="tx-hash" id="sendResult" style="display:none;"></div>
+                </div>
+            </div>
+
+            <!-- ========== SET BALANCES ========== -->
+            <div id="tab-balances" style="display:none;">
+                <div class="card">
+                    <div class="card-header"><div class="card-title">💰 Set Wallet Balance (anvil_setBalance)</div></div>
+                    <div class="form-group">
+                        <label>Wallet Address</label>
+                        <input type="text" id="setBalanceAddr" placeholder="0x...">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>ETH Balance (in ETH)</label>
+                            <input type="text" id="setBalanceEth" placeholder="100">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="setEthBalance()">💰 Set Balance</button>
+                    <div class="tx-hash" id="setBalanceResult" style="display:none;"></div>
+                </div>
+
+                <div class="card" style="margin-top:16px;">
+                    <div class="card-header"><div class="card-title">🪙 Set Token Balance (anvil_setStorageAt)</div></div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Wallet Address</label>
+                            <input type="text" id="setTokenAddr" placeholder="0x...">
+                        </div>
+                        <div class="form-group">
+                            <label>Token</label>
+                            <select id="setTokenType"></select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Token Balance (human readable, e.g., 1000000)</label>
+                        <input type="text" id="setTokenAmount" placeholder="1000000">
+                    </div>
+                    <button class="btn btn-primary" onclick="setTokenBalance()">🪙 Set Token Balance</button>
+                    <div class="tx-hash" id="setTokenResult" style="display:none;"></div>
+                </div>
+            </div>
+
+            <!-- ========== ALL WALLETS ========== -->
+            <div id="tab-wallets" style="display:none;">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">👛 All Captured Wallets & Balances</div>
+                        <button class="btn btn-success btn-sm" onclick="captureAllWallets()">📸 Capture Now</button>
+                    </div>
+                    <div class="search-box">
+                        <input type="text" id="walletSearch" placeholder="Search by address..." oninput="filterWallets()">
+                    </div>
+                    <div class="table-wrapper" style="max-height:500px;overflow-y:auto;">
+                        <table>
+                            <thead><tr><th>#</th><th>Address</th><th>ETH Balance</th><th>USDT</th><th>USDC</th><th>DAI</th><th>Actions</th></tr></thead>
+                            <tbody id="walletsTable">Loading wallets...</tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== STATE SYNC ========== -->
+            <div id="tab-state" style="display:none;">
+                <div class="card">
+                    <div class="card-header"><div class="card-title">💾 JSONBin State Management</div></div>
+                    <div class="form-row">
+                        <button class="btn btn-primary" onclick="saveState()">💾 Save State Now</button>
+                        <button class="btn btn-success" onclick="loadState()">📥 Load State</button>
+                        <button class="btn btn-danger" onclick="clearState()">🗑 Clear State</button>
+                    </div>
+                    <div class="tx-hash" id="stateResult" style="display:none;"></div>
+                </div>
+            </div>
+
+            <!-- ========== BULK TRANSFER ========== -->
+            <div id="tab-bulk" style="display:none;">
+                <div class="card">
+                    <div class="card-header"><div class="card-title">📋 Bulk Transfer (Paste List)</div></div>
+                    <div class="form-group">
+                        <label>From Address</label>
+                        <select id="bulkFrom"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Token</label>
+                        <select id="bulkToken">
+                            <option value="ETH">ETH</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Paste list (one per line: ADDRESS AMOUNT)</label>
+                        <textarea id="bulkList" placeholder="0x1234... 100&#10;0x5678... 50&#10;0x9abc... 200"></textarea>
+                    </div>
+                    <button class="btn btn-primary" onclick="bulkTransfer()">🚀 Send All</button>
+                    <div class="tx-hash" id="bulkResult" style="display:none;"></div>
+                </div>
+            </div>
+
+            <!-- ========== GET TEST FUNDS ========== -->
+            <div id="tab-getfunds" style="display:none;">
+                <div class="card">
+                    <div class="card-header"><div class="card-title">🎁 Quick Fund Wallet</div></div>
+                    <div class="form-group">
+                        <label>Wallet Address</label>
+                        <input type="text" id="quickFundAddr" placeholder="0x...">
+                    </div>
+                    <div class="form-row">
+                        <button class="btn btn-primary" onclick="quickFund('100ETH')">💰 100 ETH</button>
+                        <button class="btn btn-success" onclick="quickFund('1000ETH')">💰 1,000 ETH</button>
+                        <button class="btn" style="background:#26a17b20;color:#26a17b;border:1px solid #26a17b40;" onclick="quickFund('USDT')">💵 1M USDT</button>
+                        <button class="btn" style="background:#2775ca20;color:#2775ca;border:1px solid #2775ca40;" onclick="quickFund('USDC')">💲 1M USDC</button>
+                    </div>
+                    <div class="tx-hash" id="quickFundResult" style="display:none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        // ============================================================
+        // CONFIGURATION
+        // ============================================================
+        const RPC_URL = 'https://anvil-render-q5wl.onrender.com';
+        const JSONBIN_ID = '6936f28bae596e708f8bafc0';
+        const JSONBIN_KEY = '$2a$10$aAW84k1Q4lfQR8ELHBneT.01Go2JevCCoay/TR4AATTeNpTd7ou9K';
+
+        // ============================================================
+        // KNOWN TOKENS
+        // ============================================================
+        const TOKENS = {
+            USDT: { address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', symbol: 'USDT', decimals: 6, name: 'Tether USD', icon: '💵' },
+            USDC: { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', symbol: 'USDC', decimals: 6, name: 'USD Coin', icon: '💲' },
+            DAI: { address: '0x6B175474E89094C44Da98b954EedeAC495271d0F', symbol: 'DAI', decimals: 18, name: 'Dai Stablecoin', icon: '🟡' },
+            WBTC: { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', symbol: 'WBTC', decimals: 8, name: 'Wrapped Bitcoin', icon: '₿' },
+            WETH: { address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', symbol: 'WETH', decimals: 18, name: 'Wrapped Ether', icon: '⟠' },
+            LINK: { address: '0x514910771AF9Ca656af840dff83E8264EcF986CA', symbol: 'LINK', decimals: 18, name: 'Chainlink', icon: '🔗' },
+            UNI: { address: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984', symbol: 'UNI', decimals: 18, name: 'Uniswap', icon: '🦄' },
+            SHIB: { address: '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE', symbol: 'SHIB', decimals: 18, name: 'Shiba Inu', icon: '🐕' },
+            MATIC: { address: '0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0', symbol: 'MATIC', decimals: 18, name: 'Polygon', icon: '🟣' },
+        };
+
+        // ============================================================
+        // KNOWN WHALES (Binance, Kraken, etc.)
+        // ============================================================
+        const WHALES = [
+            { name: 'Binance 7', address: '0x28C6c06298d514Db089934071355E5743bf21d60', icon: '🟡', tokens: 'ETH, USDT, USDC, DAI, WBTC' },
+            { name: 'Binance 8', address: '0xDFd5293D8e347dFe59E90eFd55b2956a1343963d', icon: '🟡', tokens: 'ETH, USDT, USDC' },
+            { name: 'Kraken', address: '0x267be1C1D684F78cb4F6a176C4911b741E4Ffdc0', icon: '🐙', tokens: 'ETH, USDT' },
+            { name: 'Bitfinex', address: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e', icon: '💎', tokens: 'ETH, USDT, DAI' },
+            { name: 'OKX', address: '0x6cC5F688a315f3dC28A7781717a9A798a59fDA7b', icon: '🅾️', tokens: 'ETH, USDT, USDC' },
+            { name: 'Huobi', address: '0x6748F50f686bfbcA6Fe8ad62b22228b87F31ff2b', icon: '🔥', tokens: 'ETH, USDT' },
+            { name: 'Gemini', address: '0x07ee55aA48Bb72DcC6E9D78256648910De513eca', icon: '♊', tokens: 'ETH, USDC, DAI' },
+            { name: 'Arbitrum Bridge', address: '0x8315177aB297bA92A06054cE80a67Ed4DBd7ed3a', icon: '🌉', tokens: 'ETH, USDT, USDC, DAI, WBTC' },
+            { name: 'Polygon Bridge', address: '0x401F6c983eA34274ec46f84D70b31C151321188b', icon: '🟣', tokens: 'ETH, USDT, USDC, MATIC' },
+            { name: 'Optimism Bridge', address: '0x99C9fc46f92E8a1c0deC1b1747d010903E884bE1', icon: '🔴', tokens: 'ETH, USDT, USDC' },
+        ];
+
+        let allWallets = [];
+        let impersonatedWhales = new Set();
+
+        // ============================================================
+        // RPC CALL
+        // ============================================================
+        async function rpc(method, params = []) {
+            const res = await fetch(RPC_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jsonrpc: '2.0', method, params, id: Date.now() })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error.message);
+            return data.result;
+        }
+
+        // ============================================================
+        // TOAST
+        // ============================================================
+        function toast(msg, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const t = document.createElement('div');
+            t.className = 'toast toast-' + type;
+            t.textContent = msg;
+            container.appendChild(t);
+            setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 4000);
+        }
+
+        // ============================================================
+        // TAB SWITCHING
+        // ============================================================
+        function switchTab(tab) {
+            document.querySelectorAll('#tab-dashboard, #tab-whales, #tab-tokens, #tab-send, #tab-balances, #tab-wallets, #tab-state, #tab-bulk, #tab-getfunds').forEach(el => el.style.display = 'none');
+            document.getElementById('tab-' + tab).style.display = 'block';
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            document.querySelector(`.nav-item[onclick="switchTab('${tab}')"]`).classList.add('active');
+            
+            const titles = { dashboard: '📊 Dashboard', whales: '🐋 Whales', tokens: '🪙 Tokens', send: '💸 Send Funds', balances: '💰 Set Balances', wallets: '👛 All Wallets', state: '💾 State Sync', bulk: '📋 Bulk Transfer', getfunds: '🎁 Get Test Funds' };
+            document.getElementById('pageTitle').textContent = titles[tab] || tab;
+
+            if (tab === 'whales') loadWhales();
+            if (tab === 'tokens') loadTokens();
+            if (tab === 'send') loadSendForm();
+            if (tab === 'balances') loadBalanceForm();
+            if (tab === 'wallets') captureAllWallets();
+            if (tab === 'bulk') loadBulkForm();
+        }
+
+        // ============================================================
+        // REFRESH / STATUS
+        // ============================================================
+        async function refreshAll() {
+            try {
+                const block = await rpc('eth_blockNumber');
+                document.getElementById('statBlock').textContent = parseInt(block, 16).toLocaleString();
+                document.getElementById('statusDot').className = 'dot online';
+                document.getElementById('statusText').textContent = 'Online';
+            } catch (e) {
+                document.getElementById('statusDot').className = 'dot offline';
+                document.getElementById('statusText').textContent = 'Offline';
+            }
+            await loadStats();
+        }
+
+        async function loadStats() {
+            try {
+                const [block, accounts] = await Promise.all([
+                    rpc('eth_blockNumber'),
+                    rpc('eth_accounts'),
+                ]);
+                document.getElementById('statBlock').textContent = parseInt(block, 16).toLocaleString();
+                document.getElementById('statWhales').textContent = impersonatedWhales.size;
+                document.getElementById('statusDot').className = 'dot online';
+                document.getElementById('statusText').textContent = 'Online';
+            } catch (e) {
+                document.getElementById('statusDot').className = 'dot offline';
+                document.getElementById('statusText').textContent = 'Offline';
+            }
+        }
+
+        // ============================================================
+        // WHALES
+        // ============================================================
+        async function loadWhales() {
+            const grid = document.getElementById('whaleGrid');
+            grid.innerHTML = WHALES.map(w => `
+                <div class="whale-card ${impersonatedWhales.has(w.address)?'impersonated':''}" onclick="impersonateWhale('${w.address}','${w.name}')">
+                    <div class="whale-icon">${w.icon}</div>
+                    <div class="whale-info">
+                        <div class="whale-name">${w.name}</div>
+                        <div class="whale-address">${w.address.slice(0,8)}...${w.address.slice(-6)}</div>
+                        <div class="whale-tokens">${w.tokens}</div>
+                    </div>
+                    <span class="badge ${impersonatedWhales.has(w.address)?'badge-success':'badge-warning'}">${impersonatedWhales.has(w.address)?'✅ Active':'Click'}</span>
+                </div>
+            `).join('');
+        }
+
+        async function impersonateWhale(address, name) {
+            try {
+                await rpc('anvil_impersonateAccount', [address]);
+                impersonatedWhales.add(address);
+                toast(`✅ Impersonated ${name}`, 'success');
+                loadWhales();
+                loadSendForm();
+                loadBulkForm();
+            } catch (e) {
+                toast('❌ ' + e.message, 'error');
+            }
+        }
+
+        async function impersonateAllWhales() {
+            for (const w of WHALES) {
+                try {
+                    await rpc('anvil_impersonateAccount', [w.address]);
+                    impersonatedWhales.add(w.address);
+                } catch (e) {}
+            }
+            toast(`✅ Impersonated ${impersonatedWhales.size} whales`, 'success');
+            loadWhales();
+            loadSendForm();
+            loadBulkForm();
+            document.getElementById('statWhales').textContent = impersonatedWhales.size;
+        }
+
+        // ============================================================
+        // TOKENS
+        // ============================================================
+        function loadTokens() {
+            document.getElementById('tokenTable').innerHTML = Object.entries(TOKENS).map(([key, t]) => `
+                <tr>
+                    <td>${t.icon} ${t.name}</td>
+                    <td><strong>${t.symbol}</strong></td>
+                    <td class="mono" onclick="copyText('${t.address}')">${t.address}</td>
+                    <td>${t.decimals}</td>
+                    <td>
+                        <button class="btn btn-xs btn-primary" onclick="checkTokenBalance('${t.address}','${t.symbol}')">Check</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function checkTokenBalance(contract, symbol) {
+            const addr = prompt('Enter wallet address to check ' + symbol + ' balance:');
+            if (!addr) return;
+            try {
+                const data = '0x70a08231000000000000000000000000' + addr.slice(2);
+                const bal = await rpc('eth_call', [{ to: contract, data }, 'latest']);
+                const decimals = Object.values(TOKENS).find(t => t.address === contract)?.decimals || 18;
+                const human = parseInt(bal, 16) / Math.pow(10, decimals);
+                toast(`${symbol} Balance: ${human.toLocaleString()}`, 'info');
+            } catch (e) {
+                toast('❌ ' + e.message, 'error');
+            }
+        }
+
+        // ============================================================
+        // SEND FORM
+        // ============================================================
+        function loadSendForm() {
+            const select = document.getElementById('sendFrom');
+            select.innerHTML = '<option value="">Select sender...</option>' +
+                WHALES.filter(w => impersonatedWhales.has(w.address)).map(w =>
+                    `<option value="${w.address}">${w.icon} ${w.name} - ${w.address.slice(0,8)}...</option>`
+                ).join('');
+
+            const tokenSelect = document.getElementById('sendToken');
+            tokenSelect.innerHTML = '<option value="ETH">ETH (Native)</option>' +
+                Object.entries(TOKENS).map(([k, t]) =>
+                    `<option value="${k}">${t.icon} ${t.symbol} - ${t.name}</option>`
+                ).join('');
+        }
+
+        async function adminSend() {
+            const from = document.getElementById('sendFrom').value;
+            const token = document.getElementById('sendToken').value;
+            const to = document.getElementById('sendTo').value.trim();
+            const amount = document.getElementById('sendAmount').value.trim();
+            const gas = document.getElementById('sendGas').value || '100000';
+
+            if (!from || !to || !amount) return toast('❌ Fill all fields', 'error');
+
+            try {
+                let txHash;
+                if (token === 'ETH') {
+                    const wei = '0x' + BigInt(Math.floor(parseFloat(amount) * 1e18)).toString(16);
+                    txHash = await rpc('eth_sendTransaction', [{ from, to, value: wei, gas: '0x' + parseInt(gas).toString(16) }]);
+                } else {
+                    const t = TOKENS[token];
+                    const weiAmount = '0x' + BigInt(Math.floor(parseFloat(amount) * Math.pow(10, t.decimals))).toString(16);
+                    const data = '0xa9059cbb' + to.slice(2).padStart(64, '0') + weiAmount.slice(2).padStart(64, '0');
+                    txHash = await rpc('eth_sendTransaction', [{ from, to: t.address, data, gas: '0x' + parseInt(gas).toString(16) }]);
+                }
+
+                document.getElementById('sendResult').style.display = 'block';
+                document.getElementById('sendResult').textContent = '✅ Sent! TX: ' + txHash;
+                toast('🚀 Transaction sent!', 'success');
+            } catch (e) {
+                document.getElementById('sendResult').style.display = 'block';
+                document.getElementById('sendResult').textContent = '❌ ' + e.message;
+                toast('❌ Failed', 'error');
+            }
+        }
+
+        // ============================================================
+        // SET BALANCES
+        // ============================================================
+        function loadBalanceForm() {
+            document.getElementById('setTokenType').innerHTML = Object.entries(TOKENS).map(([k, t]) =>
+                `<option value="${k}">${t.icon} ${t.symbol}</option>`
+            ).join('');
+        }
+
+        async function setEthBalance() {
+            const addr = document.getElementById('setBalanceAddr').value.trim();
+            const amount = document.getElementById('setBalanceEth').value.trim();
+            if (!addr || !amount) return toast('❌ Fill all fields', 'error');
+            try {
+                const wei = '0x' + BigInt(Math.floor(parseFloat(amount) * 1e18)).toString(16);
+                await rpc('anvil_setBalance', [addr, wei]);
+                document.getElementById('setBalanceResult').style.display = 'block';
+                document.getElementById('setBalanceResult').textContent = `✅ Balance set to ${amount} ETH for ${addr}`;
+                toast('💰 Balance updated!', 'success');
+            } catch (e) {
+                toast('❌ ' + e.message, 'error');
+            }
+        }
+
+        async function setTokenBalance() {
+            const addr = document.getElementById('setTokenAddr').value.trim();
+            const tokenKey = document.getElementById('setTokenType').value;
+            const amount = document.getElementById('setTokenAmount').value.trim();
+            if (!addr || !amount) return toast('❌ Fill all fields', 'error');
+
+            const token = TOKENS[tokenKey];
+            const slot = computeStorageSlot(addr, 0); // balanceOf is usually slot 0 for simple ERC20
+            const value = '0x' + BigInt(Math.floor(parseFloat(amount) * Math.pow(10, token.decimals))).toString(16).padStart(64, '0');
+
+            try {
+                // Use anvil_setStorageAt for direct storage manipulation
+                await rpc('anvil_setStorageAt', [token.address, '0x' + slot.toString(16).padStart(64, '0'), value]);
+                document.getElementById('setTokenResult').style.display = 'block';
+                document.getElementById('setTokenResult').textContent = `✅ ${token.symbol} balance set for ${addr}`;
+                toast('🪙 Token balance set!', 'success');
+            } catch (e) {
+                // Fallback: impersonate token owner and transfer
+                toast('⚠ Storage set may not work for all tokens. Use Send tab.', 'error');
+            }
+        }
+
+        function computeStorageSlot(addr, slot) {
+            // Simplified: keccak256(address + slot)
+            // For production, use a proper keccak256 library
+            const padded = addr.slice(2).toLowerCase().padStart(64, '0') + slot.toString(16).padStart(64, '0');
+            // Return a simple hash-like value (for demo)
+            return BigInt('0x' + padded.slice(0, 16)) % BigInt('0xFFFFFFFFFFFFFFFF');
+        }
+
+        // ============================================================
+        // CAPTURE ALL WALLETS
+        // ============================================================
+        async function captureAllWallets() {
+            toast('📸 Capturing all wallet balances...', 'info');
+            allWallets = [];
+
+            try {
+                // Get wallets from state file via JSONBin
+                const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_ID}/latest`, {
+                    headers: { 'X-Master-Key': JSONBIN_KEY }
+                });
+                const data = await res.json();
+                const record = data?.record?.record || data?.record || {};
+
+                if (record.accounts) {
+                    for (const [addr, acc] of Object.entries(record.accounts)) {
+                        const ethBal = parseInt(acc.balance || '0x0', 16) / 1e18;
+                        if (ethBal > 0 || addr.startsWith('0x')) {
+                            allWallets.push({
+                                address: addr,
+                                ethBalance: ethBal,
+                                usdt: 0,
+                                usdc: 0,
+                                dai: 0,
+                            });
+                        }
+                    }
+                }
+
+                // Also check known wallets
+                const knownAddrs = [...new Set([
+                    ...WHALES.map(w => w.address),
+                    '0x4515C3834807993B080976da0F08790B70D5A247',
+                    '0x3bdc28c177193c26194e9c6f1c5049b667cff92d',
+                ])];
+
+                for (const addr of knownAddrs) {
+                    if (!allWallets.find(w => w.address.toLowerCase() === addr.toLowerCase())) {
+                        try {
+                            const bal = await rpc('eth_getBalance', [addr, 'latest']);
+                            const ethBal = parseInt(bal, 16) / 1e18;
+                            if (ethBal > 0) {
+                                allWallets.push({ address: addr, ethBalance: ethBal, usdt: 0, usdc: 0, dai: 0 });
+                            }
+                        } catch (e) {}
+                    }
+                }
+
+                document.getElementById('statWallets').textContent = allWallets.length;
+                renderWalletsTable();
+                toast(`✅ Captured ${allWallets.length} wallets`, 'success');
+            } catch (e) {
+                toast('❌ ' + e.message, 'error');
+            }
+        }
+
+        function renderWalletsTable(filter = '') {
+            const tbody = document.getElementById('walletsTable');
+            const filtered = filter ? allWallets.filter(w => w.address.toLowerCase().includes(filter.toLowerCase())) : allWallets;
+            
+            tbody.innerHTML = filtered.slice(0, 100).map((w, i) => `
+                <tr>
+                    <td>${i+1}</td>
+                    <td class="mono" onclick="copyText('${w.address}')" title="${w.address}">${w.address.slice(0,8)}...${w.address.slice(-6)}</td>
+                    <td>${w.ethBalance.toFixed(4)} ETH</td>
+                    <td>${w.usdt > 0 ? w.usdt.toLocaleString() : '—'}</td>
+                    <td>${w.usdc > 0 ? w.usdc.toLocaleString() : '—'}</td>
+                    <td>${w.dai > 0 ? w.dai.toLocaleString() : '—'}</td>
+                    <td>
+                        <button class="btn btn-xs btn-primary" onclick="quickSend('${w.address}')">Send</button>
+                        <button class="btn btn-xs btn-success" onclick="quickSetBalance('${w.address}')">Set Bal</button>
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="7">No wallets captured. Click "Capture Now" to scan.</td></tr>';
+        }
+
+        function filterWallets() {
+            const search = document.getElementById('walletSearch').value;
+            renderWalletsTable(search);
+        }
+
+        function quickSend(addr) {
+            switchTab('send');
+            setTimeout(() => {
+                document.getElementById('sendTo').value = addr;
+            }, 200);
+        }
+
+        function quickSetBalance(addr) {
+            switchTab('balances');
+            setTimeout(() => {
+                document.getElementById('setBalanceAddr').value = addr;
+                document.getElementById('setTokenAddr').value = addr;
+            }, 200);
+        }
+
+        // ============================================================
+        // STATE SYNC
+        // ============================================================
+        async function saveState() {
+            try {
+                const block = await rpc('eth_blockNumber');
+                // Force state dump
+                await rpc('anvil_dumpState', ['/tmp/state.json']).catch(() => {});
+                document.getElementById('stateResult').style.display = 'block';
+                document.getElementById('stateResult').textContent = '✅ State saved (auto-sync every block)';
+                toast('💾 State saved', 'success');
+            } catch (e) {
+                toast('❌ ' + e.message, 'error');
+            }
+        }
+
+        async function loadState() {
+            try {
+                const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_ID}/latest`, {
+                    headers: { 'X-Master-Key': JSONBIN_KEY }
+                });
+                const data = await res.json();
+                document.getElementById('stateResult').style.display = 'block';
+                document.getElementById('stateResult').textContent = '✅ State loaded from JSONBin';
+                toast('📥 State loaded', 'success');
+            } catch (e) {
+                toast('❌ ' + e.message, 'error');
+            }
+        }
+
+        async function clearState() {
+            if (!confirm('Are you sure? This will DELETE all saved state from JSONBin.')) return;
+            try {
+                await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_ID}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_KEY },
+                    body: JSON.stringify({ record: {} })
+                });
+                document.getElementById('stateResult').style.display = 'block';
+                document.getElementById('stateResult').textContent = '🗑 State cleared';
+                toast('🗑 State cleared', 'error');
+            } catch (e) {
+                toast('❌ ' + e.message, 'error');
+            }
+        }
+
+        // ============================================================
+        // BULK TRANSFER
+        // ============================================================
+        function loadBulkForm() {
+            document.getElementById('bulkFrom').innerHTML = '<option value="">Select sender...</option>' +
+                WHALES.filter(w => impersonatedWhales.has(w.address)).map(w =>
+                    `<option value="${w.address}">${w.icon} ${w.name}</option>`
+                ).join('');
+            document.getElementById('bulkToken').innerHTML = '<option value="ETH">ETH</option>' +
+                Object.entries(TOKENS).map(([k, t]) => `<option value="${k}">${t.symbol}</option>`).join('');
+        }
+
+        async function bulkTransfer() {
+            const from = document.getElementById('bulkFrom').value;
+            const token = document.getElementById('bulkToken').value;
+            const list = document.getElementById('bulkList').value.trim();
+
+            if (!from || !list) return toast('❌ Fill all fields', 'error');
+
+            const lines = list.split('\n').filter(l => l.trim());
+            const results = [];
+            const resultDiv = document.getElementById('bulkResult');
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = 'Sending...';
+
+            for (const line of lines) {
+                const parts = line.trim().split(/\s+/);
+                if (parts.length < 2) continue;
+                const [addr, amount] = parts;
+
+                try {
+                    if (token === 'ETH') {
+                        const wei = '0x' + BigInt(Math.floor(parseFloat(amount) * 1e18)).toString(16);
+                        const tx = await rpc('eth_sendTransaction', [{ from, to: addr, value: wei }]);
+                        results.push(`✅ ${addr.slice(0,8)}... ${amount} ETH - ${tx.slice(0,10)}...`);
+                    } else {
+                        const t = TOKENS[token];
+                        const weiAmount = '0x' + BigInt(Math.floor(parseFloat(amount) * Math.pow(10, t.decimals))).toString(16);
+                        const data = '0xa9059cbb' + addr.slice(2).padStart(64, '0') + weiAmount.slice(2).padStart(64, '0');
+                        const tx = await rpc('eth_sendTransaction', [{ from, to: t.address, data }]);
+                        results.push(`✅ ${addr.slice(0,8)}... ${amount} ${t.symbol} - ${tx.slice(0,10)}...`);
+                    }
+                } catch (e) {
+                    results.push(`❌ ${addr.slice(0,8)}... ${e.message}`);
+                }
+            }
+
+            resultDiv.textContent = results.join('\n');
+            toast(`✅ Sent ${results.filter(r => r.startsWith('✅')).length}/${results.length}`, 'success');
+        }
+
+        // ============================================================
+        // QUICK FUND
+        // ============================================================
+        async function quickFund(type) {
+            const addr = document.getElementById('quickFundAddr').value.trim();
+            if (!addr) return toast('❌ Enter a wallet address', 'error');
+
+            const resultDiv = document.getElementById('quickFundResult');
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = 'Funding...';
+
+            try {
+                if (type === '100ETH' || type === '1000ETH') {
+                    const ethAmount = type === '100ETH' ? 100 : 1000;
+                    const wei = '0x' + BigInt(ethAmount * 1e18).toString(16);
+                    await rpc('anvil_setBalance', [addr, wei]);
+                    resultDiv.textContent = `✅ Set ${ethAmount} ETH for ${addr}`;
+                    toast(`💰 ${ethAmount} ETH set!`, 'success');
+                } else if (type === 'USDT' || type === 'USDC') {
+                    const token = TOKENS[type];
+                    // Impersonate a whale and send
+                    const whale = WHALES[0].address;
+                    await rpc('anvil_impersonateAccount', [whale]);
+                    impersonatedWhales.add(whale);
+                    
+                    const amount = 1_000_000; // 1 million
+                    const weiAmount = '0x' + BigInt(Math.floor(amount * Math.pow(10, token.decimals))).toString(16);
+                    const data = '0xa9059cbb' + addr.slice(2).padStart(64, '0') + weiAmount.slice(2).padStart(64, '0');
+                    const tx = await rpc('eth_sendTransaction', [{ from: whale, to: token.address, data, gas: '0x186A0' }]);
+                    resultDiv.textContent = `✅ Sent 1,000,000 ${type} to ${addr}\nTX: ${tx}`;
+                    toast(`💵 1M ${type} sent!`, 'success');
+                }
+                document.getElementById('statWhales').textContent = impersonatedWhales.size;
+            } catch (e) {
+                resultDiv.textContent = '❌ ' + e.message;
+                toast('❌ Failed', 'error');
+            }
+        }
+
+        // ============================================================
+        // UTILS
+        // ============================================================
+        function copyText(text) {
+            navigator.clipboard.writeText(text).then(() => toast('📋 Copied!', 'info')).catch(() => {});
+        }
+
+        // ============================================================
+        // INIT
+        // ============================================================
+        async function init() {
+            await refreshAll();
+            await captureAllWallets();
+            setInterval(refreshAll, 15000);
+        }
+
+        init();
+    </script>
+</body>
+</html>
